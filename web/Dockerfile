@@ -2,6 +2,10 @@
 FROM node:20-slim AS frontend-build
 WORKDIR /build
 
+COPY frontend/package*.json ./
+RUN npm ci --silent
+COPY frontend/ ./
+
 ARG VITE_SUPABASE_URL
 ARG VITE_SUPABASE_ANON_KEY
 ARG VITE_API_BASE_URL
@@ -10,9 +14,6 @@ ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
 ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 
-COPY frontend/package*.json ./
-RUN npm ci --silent
-COPY frontend/ ./
 RUN npm run build
 
 # Stage 2: Python backend + built frontend assets
