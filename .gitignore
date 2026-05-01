@@ -16,6 +16,7 @@ htmlcov/
 node_modules/
 dist/
 .next/
+*.tsbuildinfo
 
 # Env
 .env

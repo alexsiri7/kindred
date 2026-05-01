@@ -1,0 +1,25 @@
+[project]
+name = "kindred-web-backend"
+version = "0.1.0"
+requires-python = ">=3.12"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "ASYNC"]
+# B008: FastAPI uses `Depends(...)` as a function default — that's the
+# canonical pattern, not a bug.
+ignore = ["B008"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+ignore_missing_imports = true
+files = ["."]
+exclude = ["tests/"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
