@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Awaitable, Callable, MutableMapping
 from pathlib import Path
 from typing import Any
@@ -16,12 +17,21 @@ from tools import patterns as pattern_tools
 
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
 
+_log = logging.getLogger(__name__)
 if settings.sentry_dsn:
-    sentry_sdk.init(
-        dsn=settings.sentry_dsn,
-        traces_sample_rate=0.1,
-        environment="production",
-    )
+    try:
+        sentry_sdk.init(
+            dsn=settings.sentry_dsn,
+            traces_sample_rate=0.1,
+            environment="production",
+        )
+        _log.info("Sentry error reporting enabled (environment=production)")
+    except Exception:
+        _log.warning(
+            "Sentry init failed; continuing without error reporting", exc_info=True
+        )
+else:
+    _log.info("Sentry error reporting disabled (no SENTRY_DSN set)")
 
 mcp: FastMCP = FastMCP(
     "Kindred",

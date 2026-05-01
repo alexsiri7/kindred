@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 
@@ -14,12 +15,21 @@ from routes import connect, entries, patterns, search
 from routes import settings as settings_route
 from settings import settings
 
+_log = logging.getLogger(__name__)
 if settings.sentry_dsn:
-    sentry_sdk.init(
-        dsn=settings.sentry_dsn,
-        traces_sample_rate=0.1,
-        environment="production",
-    )
+    try:
+        sentry_sdk.init(
+            dsn=settings.sentry_dsn,
+            traces_sample_rate=0.1,
+            environment="production",
+        )
+        _log.info("Sentry error reporting enabled (environment=production)")
+    except Exception:
+        _log.warning(
+            "Sentry init failed; continuing without error reporting", exc_info=True
+        )
+else:
+    _log.info("Sentry error reporting disabled (no SENTRY_DSN set)")
 
 app = FastAPI(title="Kindred Web Backend")
 

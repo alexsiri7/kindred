@@ -55,6 +55,7 @@ Two Railway services backed by one Supabase project.
 - **Auth**: Supabase Auth with Google as the OAuth provider (web); MCP OAuth 2.1 flow for Claude.ai
 - **Embeddings**: OpenAI `text-embedding-3-small` via Requesty gateway (matches reli)
 - **Deployment**: Railway (two services), one Supabase project
+- **Observability**: Sentry (`sentry-sdk[fastapi]` for Python services, `@sentry/react` for the frontend); opt-in via `SENTRY_DSN` / `VITE_SENTRY_DSN`
 - **CI**: GitHub Actions, mirroring reli's `./scripts/gates.sh` discipline (test, lint, typecheck)
 
 ### Why two Railway services, not one
@@ -305,6 +306,7 @@ Non-negotiable in v1; the implementation should not regress on any of these.
 - All user data scoped by RLS to `auth.uid()`. Cross-user reads are physically impossible from app code, even if a query forgets a `WHERE` clause.
 - Supabase Postgres encryption at rest is on by default.
 - No use of user data for training. We don't train models, but we explicitly select embedding/LLM providers with no-training policies. Verify per provider in `.env.example`.
+- Error reporting via Sentry is opt-in (controlled by `SENTRY_DSN` / `VITE_SENTRY_DSN`; disabled when empty). When enabled in production, unhandled exceptions, stack traces, and request metadata may be sent to Sentry. Custom PII scrubbing (`beforeSend`) is deferred until we observe what is actually captured; until then, treat Sentry as a privacy-relevant processor.
 - `/settings` exposes data export (full JSON dump of entries + patterns + occurrences) and account deletion (hard delete cascading across all tables).
 - Transcripts are optional per user (toggle in settings). Default: on, because they're useful for retrieval; user can flip to summary-only.
 
