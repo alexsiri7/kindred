@@ -137,6 +137,7 @@ returns table (entry_id uuid, similarity float, content text)
 language sql
 stable
 security invoker
+set search_path = extensions, public
 as $$
     select
         e.entry_id,
