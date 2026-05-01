@@ -8,7 +8,7 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from auth import ConnectorTokenVerifier, current_user_id, resolve_user_id
+from auth import current_user_id, resolve_user_id
 from tools import entries as entry_tools
 from tools import patterns as pattern_tools
 
@@ -18,7 +18,6 @@ mcp: FastMCP = FastMCP(
     "Kindred",
     stateless_http=True,
     json_response=True,
-    token_verifier=ConnectorTokenVerifier(),
 )
 
 # ---------------------------------------------------------------------------
