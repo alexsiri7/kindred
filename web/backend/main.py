@@ -5,12 +5,21 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+import sentry_sdk
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from routes import connect, entries, patterns, search
 from routes import settings as settings_route
+from settings import settings
+
+if settings.sentry_dsn:
+    sentry_sdk.init(
+        dsn=settings.sentry_dsn,
+        traces_sample_rate=0.1,
+        environment="production",
+    )
 
 app = FastAPI(title="Kindred Web Backend")
 

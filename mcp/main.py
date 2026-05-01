@@ -6,13 +6,22 @@ from collections.abc import Awaitable, Callable, MutableMapping
 from pathlib import Path
 from typing import Any
 
+import sentry_sdk
 from mcp.server.fastmcp import FastMCP
 
 from auth import current_user_id, resolve_user_id
+from settings import settings
 from tools import entries as entry_tools
 from tools import patterns as pattern_tools
 
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
+
+if settings.sentry_dsn:
+    sentry_sdk.init(
+        dsn=settings.sentry_dsn,
+        traces_sample_rate=0.1,
+        environment="production",
+    )
 
 mcp: FastMCP = FastMCP(
     "Kindred",
