@@ -1,0 +1,10 @@
+# Railway config for the MCP service.
+# Service root directory = repo root (so COPY prompts/ works in the Dockerfile).
+# Set this service's root to "/" in the Railway dashboard.
+
+[build]
+dockerfilePath = "mcp/Dockerfile"
+
+[deploy]
+healthcheckPath = "/healthz"
+healthcheckTimeout = 30

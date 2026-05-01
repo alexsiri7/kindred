@@ -1,0 +1,10 @@
+# Railway config for the web service.
+# Service root directory = "web/" in the Railway dashboard.
+# Dockerfile is web/Dockerfile (auto-detected from root).
+
+[build]
+dockerfilePath = "Dockerfile"
+
+[deploy]
+healthcheckPath = "/healthz"
+healthcheckTimeout = 60
