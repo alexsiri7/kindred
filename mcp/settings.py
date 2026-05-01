@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     requesty_api_key: str = ""
     requesty_base_url: str = "https://router.requesty.ai/v1"
 
+    sentry_dsn: str = ""
+
     mcp_host: str = "0.0.0.0"
     mcp_port: int = 8000
 
