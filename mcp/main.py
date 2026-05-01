@@ -67,7 +67,13 @@ def with_user_context(app: ASGIApp) -> ASGIApp:
             await app(scope, receive, send)
             return
         if scope.get("path") == "/healthz":
-            await send({"type": "http.response.start", "status": 200, "headers": [[b"content-type", b"application/json"]]})
+            await send(
+                {
+                    "type": "http.response.start",
+                    "status": 200,
+                    "headers": [[b"content-type", b"application/json"]],
+                }
+            )
             await send({"type": "http.response.body", "body": b'{"ok":true}'})
             return
         headers = {k.decode().lower(): v.decode() for k, v in scope.get("headers", [])}
