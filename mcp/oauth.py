@@ -109,9 +109,7 @@ def _authenticate_client(form: FormData) -> dict[str, Any]:
     if not client_id:
         raise HTTPException(status_code=401, detail="invalid_client")
     client = cleanup_and_get(registered_clients, client_id)
-    stored_secret = ""
-    if isinstance(client, dict):
-        stored_secret = str(client.get("client_secret", ""))
+    stored_secret = str(client.get("client_secret", "")) if client else ""
     if not client or not secrets.compare_digest(stored_secret, client_secret):
         raise HTTPException(status_code=401, detail="invalid_client")
     return client
