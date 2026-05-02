@@ -93,9 +93,7 @@ async def oauth_register(request: Request) -> Response:
     return JSONResponse(
         {
             "client_id": record.client_id,
-            "client_secret": record.client_secret,
             "client_id_issued_at": record.issued_at,
-            "client_secret_expires_at": 0,
             "redirect_uris": list(record.redirect_uris),
             "client_name": record.client_name,
             "grant_types": ["authorization_code", "refresh_token"],
@@ -121,24 +119,33 @@ async def oauth_authorize(request: Request) -> Response:
     client_state = qp.get("state")
     resource = qp.get("resource")
 
-    if response_type != "code":
-        return _error("unsupported_response_type", "response_type must be 'code'")
-    if code_challenge_method != "S256":
-        return _error(
-            "invalid_request", "code_challenge_method must be 'S256' (OAuth 2.1 requires PKCE S256)"
-        )
-    if not code_challenge:
-        return _error("invalid_request", "code_challenge is required")
-
+    # RFC 6749 §4.1.2.1: pre-redirect-validation errors return JSON directly.
+    # Don't redirect to an unverified redirect_uri.
     client = oauth_state.get_client(client_id)
     if client is None:
         return _error("invalid_client", "unknown client_id")
     if redirect_uri not in client.redirect_uris:
         return _error("invalid_request", "redirect_uri is not registered for this client")
 
+    # RFC 6749 §4.1.2.1: post-redirect-validation errors redirect with ?error=.
+    def _redirect_error(code: str, description: str) -> Response:
+        params: dict[str, str] = {"error": code, "error_description": description}
+        if client_state is not None:
+            params["state"] = client_state
+        return RedirectResponse(url=f"{redirect_uri}?{urlencode(params)}", status_code=302)
+
+    if response_type != "code":
+        return _redirect_error("unsupported_response_type", "response_type must be 'code'")
+    if code_challenge_method != "S256":
+        return _redirect_error(
+            "invalid_request", "code_challenge_method must be 'S256' (OAuth 2.1 requires PKCE S256)"
+        )
+    if not code_challenge:
+        return _redirect_error("invalid_request", "code_challenge is required")
+
     canonical = oauth_state.canonical_resource_url()
     if resource is not None and resource != canonical:
-        return _error(
+        return _redirect_error(
             "invalid_target",
             f"resource indicator must be {canonical!r} (RFC 8707)",
         )

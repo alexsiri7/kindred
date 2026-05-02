@@ -19,7 +19,6 @@ class Settings(BaseSettings):
     # MCP OAuth 2.1 (issue #11)
     mcp_base_url: str = "https://kindred-mcp.interstellarai.net"
     secret_key: str = ""
-    supabase_jwt_secret: str = ""
     supabase_anon_key: str = ""
 
 

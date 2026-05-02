@@ -50,7 +50,6 @@ def test_mcp_base_url_default(monkeypatch: pytest.MonkeyPatch) -> None:
     [
         ("MCP_BASE_URL", "mcp_base_url"),
         ("SECRET_KEY", "secret_key"),
-        ("SUPABASE_JWT_SECRET", "supabase_jwt_secret"),
         ("SUPABASE_ANON_KEY", "supabase_anon_key"),
     ],
 )
@@ -64,13 +63,11 @@ def test_oauth_settings_round_trip(
     assert getattr(settings_module.settings, field) == f"value-for-{field}"
 
 
-@pytest.mark.parametrize(
-    "field", ["secret_key", "supabase_jwt_secret", "supabase_anon_key"]
-)
+@pytest.mark.parametrize("field", ["secret_key", "supabase_anon_key"])
 def test_oauth_secret_settings_default_empty(
     monkeypatch: pytest.MonkeyPatch, field: str
 ) -> None:
-    for env_var in ("SECRET_KEY", "SUPABASE_JWT_SECRET", "SUPABASE_ANON_KEY"):
+    for env_var in ("SECRET_KEY", "SUPABASE_ANON_KEY"):
         monkeypatch.delenv(env_var, raising=False)
     import settings as settings_module
 

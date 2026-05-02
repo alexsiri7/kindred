@@ -91,11 +91,20 @@ Send = Callable[[MutableMapping[str, Any]], Awaitable[None]]
 ASGIApp = Callable[[Scope, Receive, Send], Awaitable[None]]
 
 
-_PUBLIC_PATH_PREFIXES = ("/.well-known/", "/oauth/")
+_PUBLIC_PATHS = frozenset(
+    {
+        "/.well-known/oauth-protected-resource",
+        "/.well-known/oauth-authorization-server",
+        "/oauth/register",
+        "/oauth/authorize",
+        "/oauth/callback",
+        "/oauth/token",
+    }
+)
 
 
 def _is_public_path(path: str) -> bool:
-    return any(path.startswith(p) for p in _PUBLIC_PATH_PREFIXES)
+    return path in _PUBLIC_PATHS
 
 
 def with_user_context(app: ASGIApp) -> ASGIApp:

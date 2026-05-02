@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import logging
 import secrets
 import time
 from dataclasses import dataclass
@@ -18,6 +19,8 @@ from urllib.parse import urljoin
 import jwt
 
 from settings import settings
+
+_log = logging.getLogger(__name__)
 
 _AUTH_CODE_TTL_S = 600  # 10 minutes
 _ACCESS_TOKEN_TTL_S = 3600  # 1 hour
@@ -32,7 +35,6 @@ _REFRESH_TOKEN_TTL_S = 30 * 24 * 3600  # 30 days
 @dataclass(frozen=True)
 class RegisteredClient:
     client_id: str
-    client_secret: str
     redirect_uris: tuple[str, ...]
     client_name: str
     issued_at: int
@@ -72,7 +74,10 @@ class RefreshTokenRecord:
 
 
 # ---------------------------------------------------------------------------
-# In-process stores (single Uvicorn worker)
+# In-process stores. Single Uvicorn worker, so the pop()-based critical
+# sections (redeem_auth_code, consume_refresh_token, pop_session) are atomic
+# between awaits under asyncio cooperative scheduling — no asyncio.Lock
+# needed at this scale. Scaling to >1 worker will require persistence.
 # ---------------------------------------------------------------------------
 _clients: dict[str, RegisteredClient] = {}
 _sessions: dict[str, AuthSession] = {}
@@ -92,10 +97,16 @@ def canonical_resource_url() -> str:
     documented in the research (claude-code issue #46539): a token minted with
     ``aud="https://x/mcp"`` will be rejected if validation expects
     ``"https://x/mcp/"``.
+
+    Fails loud if ``MCP_BASE_URL`` is unset — RFC 8707 audience binding is
+    defeated by a relative-URL ``aud`` claim, and silent fallbacks would mask
+    misconfiguration until cross-host validation breaks.
     """
     base = settings.mcp_base_url.rstrip("/") if settings.mcp_base_url else ""
     if not base:
-        return "/mcp"
+        raise RuntimeError(
+            "MCP_BASE_URL is not configured; cannot derive canonical resource URL"
+        )
     return urljoin(base + "/", "mcp")
 
 
@@ -106,10 +117,8 @@ def canonical_resource_url() -> str:
 
 def register_client(redirect_uris: list[str], client_name: str) -> RegisteredClient:
     client_id = secrets.token_urlsafe(24)
-    client_secret = secrets.token_urlsafe(48)
     record = RegisteredClient(
         client_id=client_id,
-        client_secret=client_secret,
         redirect_uris=tuple(redirect_uris),
         client_name=client_name,
         issued_at=int(time.time()),
@@ -250,7 +259,8 @@ def verify_access_jwt(token: str, expected_audience: str) -> str | None:
             audience=expected_audience,
             leeway=0,
         )
-    except jwt.PyJWTError:
+    except jwt.PyJWTError as exc:
+        _log.info("JWT verification failed: %s", type(exc).__name__)
         return None
     sub = payload.get("sub")
     return str(sub) if sub else None

@@ -75,6 +75,33 @@ def test_verify_access_jwt_expired_returns_none() -> None:
     assert verify_access_jwt(token, expected_audience=aud) is None
 
 
+def test_verify_access_jwt_logs_failure(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Operators need the failure reason in logs to diagnose misconfiguration
+    (e.g., a wrong SECRET_KEY) without leaking the token bytes."""
+    import logging
+
+    aud = canonical_resource_url()
+    token = mint_access_jwt(user_id=USER_ID, audience=aud)
+    with caplog.at_level(logging.INFO, logger="oauth.state"):
+        assert verify_access_jwt(token, expected_audience="https://other/mcp") is None
+    assert any(
+        "JWT verification failed" in r.message and "InvalidAudienceError" in r.message
+        for r in caplog.records
+    )
+
+
+def test_canonical_resource_url_raises_when_base_url_unset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Empty MCP_BASE_URL would mint JWTs with aud='/mcp', defeating RFC 8707
+    audience binding. Fail loud instead of silently producing a relative URL."""
+    monkeypatch.setattr(settings_module.settings, "mcp_base_url", "")
+    with pytest.raises(RuntimeError, match="MCP_BASE_URL"):
+        canonical_resource_url()
+
+
 # ---------------------------------------------------------------------------
 # Discovery endpoints
 # ---------------------------------------------------------------------------
@@ -126,7 +153,9 @@ async def test_register_happy_path(client: httpx.AsyncClient) -> None:
     assert res.status_code == 201
     body = res.json()
     assert body["client_id"]
-    assert body["client_secret"]
+    # Public clients (token_endpoint_auth_method=none) MUST NOT receive a
+    # client_secret in the registration response — RFC 7591 §3.2.1.
+    assert "client_secret" not in body
     assert "authorization_code" in body["grant_types"]
     assert "refresh_token" in body["grant_types"]
     assert body["token_endpoint_auth_method"] == "none"
@@ -179,8 +208,13 @@ async def test_authorize_rejects_plain_pkce(client: httpx.AsyncClient) -> None:
                 "state": "csrf",
             },
         )
-    assert res.status_code == 400
-    assert res.json()["error"] == "invalid_request"
+    # RFC 6749 §4.1.2.1: post-redirect-validation errors redirect with ?error=.
+    assert res.status_code == 302
+    parsed = urlparse(res.headers["location"])
+    qs = parse_qs(parsed.query)
+    assert f"{parsed.scheme}://{parsed.netloc}{parsed.path}" == "https://app/cb"
+    assert qs["error"] == ["invalid_request"]
+    assert qs["state"] == ["csrf"]
 
 
 @pytest.mark.asyncio
@@ -196,8 +230,79 @@ async def test_authorize_rejects_unknown_client(client: httpx.AsyncClient) -> No
                 "code_challenge_method": "S256",
             },
         )
+    # RFC 6749 §4.1.2.1: pre-redirect-validation errors return JSON, NOT a
+    # redirect — never bounce to an unverified redirect_uri.
     assert res.status_code == 400
     assert res.json()["error"] == "invalid_client"
+
+
+@pytest.mark.asyncio
+async def test_authorize_rejects_unregistered_redirect_uri(
+    client: httpx.AsyncClient,
+) -> None:
+    async with client as c:
+        client_id = await _register(c, "https://app/cb")
+        res = await c.get(
+            "/oauth/authorize",
+            params={
+                "client_id": client_id,
+                "redirect_uri": "https://attacker.example/cb",
+                "response_type": "code",
+                "code_challenge": "anything",
+                "code_challenge_method": "S256",
+            },
+        )
+    # Pre-redirect-validation: don't bounce to a redirect_uri we haven't
+    # validated against the registered set.
+    assert res.status_code == 400
+    assert res.json()["error"] == "invalid_request"
+
+
+@pytest.mark.asyncio
+async def test_authorize_redirects_with_error_for_unsupported_response_type(
+    client: httpx.AsyncClient,
+) -> None:
+    async with client as c:
+        client_id = await _register(c, "https://app/cb")
+        res = await c.get(
+            "/oauth/authorize",
+            params={
+                "client_id": client_id,
+                "redirect_uri": "https://app/cb",
+                "response_type": "token",
+                "code_challenge": derive_pkce_s256_challenge("v" * 64),
+                "code_challenge_method": "S256",
+                "state": "csrf",
+            },
+        )
+    assert res.status_code == 302
+    parsed = urlparse(res.headers["location"])
+    qs = parse_qs(parsed.query)
+    assert f"{parsed.scheme}://{parsed.netloc}{parsed.path}" == "https://app/cb"
+    assert qs["error"] == ["unsupported_response_type"]
+    assert qs["state"] == ["csrf"]
+
+
+@pytest.mark.asyncio
+async def test_authorize_redirects_with_error_omits_state_when_absent(
+    client: httpx.AsyncClient,
+) -> None:
+    async with client as c:
+        client_id = await _register(c, "https://app/cb")
+        res = await c.get(
+            "/oauth/authorize",
+            params={
+                "client_id": client_id,
+                "redirect_uri": "https://app/cb",
+                "response_type": "code",
+                "code_challenge": "anything",
+                "code_challenge_method": "plain",
+            },
+        )
+    assert res.status_code == 302
+    qs = parse_qs(urlparse(res.headers["location"]).query)
+    assert qs["error"] == ["invalid_request"]
+    assert "state" not in qs
 
 
 @pytest.mark.asyncio

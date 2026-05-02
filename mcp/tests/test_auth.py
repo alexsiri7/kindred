@@ -151,3 +151,20 @@ async def test_middleware_passes_health_check_through() -> None:
         res = await c.get("/healthz")
     assert res.status_code == 200
     assert res.json() == {"ok": True}
+
+
+@pytest.mark.asyncio
+async def test_middleware_rejects_unknown_oauth_subpath(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The public-path allow-list is exact-match: a future /oauth/admin or
+    similar route must NOT inherit unauthenticated access."""
+    monkeypatch.setattr(settings_module.settings, "mcp_base_url", BASE_URL)
+    from main import app
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as c:
+        res = await c.get("/oauth/admin")
+    assert res.status_code == 401
+    assert res.headers.get("www-authenticate", "").startswith("Bearer realm=")
