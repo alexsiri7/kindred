@@ -8,6 +8,7 @@ from pathlib import Path
 import sentry_sdk
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from routes import connect, entries, patterns, search
@@ -48,7 +49,15 @@ def healthz() -> dict[str, str]:
     return {"status": "ok"}
 
 
-# Serve the built React frontend for all non-API routes.
+# Serve the built React frontend. Static assets are served directly; all
+# other GET requests fall back to index.html (SPA client-side routing).
 _static = Path(__file__).parent / "static"
 if _static.exists():
-    app.mount("/", StaticFiles(directory=_static, html=True), name="frontend")
+    app.mount("/assets", StaticFiles(directory=_static / "assets"), name="assets")
+
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str) -> FileResponse:
+        candidate = _static / full_path
+        if candidate.is_file():
+            return FileResponse(candidate)
+        return FileResponse(_static / "index.html")
