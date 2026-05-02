@@ -295,7 +295,10 @@ def register_routes(mcp_obj: FastMCP) -> None:
 
         if not flow_id or not access_token:
             return JSONResponse(
-                {"error": "invalid_request", "error_description": "flow_id and access_token required"},
+                {
+                    "error": "invalid_request",
+                    "error_description": "flow_id and access_token required",
+                },
                 status_code=400,
                 headers=_CORS_HEADERS,
             )
