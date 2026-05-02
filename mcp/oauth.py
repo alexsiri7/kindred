@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import json
 import logging
 import secrets
 import uuid
@@ -29,12 +30,15 @@ from urllib.parse import urlencode
 import httpx
 import jwt
 from mcp.server.fastmcp import FastMCP
+from starlette.datastructures import FormData
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
 from starlette.responses import JSONResponse, RedirectResponse, Response
 
 from oauth_state import (
+    StoreFullError,
     auth_codes,
+    cleanup_and_get,
     cleanup_and_pop,
     cleanup_and_store,
     oauth_sessions,
@@ -93,6 +97,48 @@ def _pkce_s256(verifier: str) -> str:
     return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
 
 
+def _authenticate_client(form: FormData) -> dict[str, Any]:
+    """Verify ``client_id`` + ``client_secret`` from a token-endpoint POST body.
+
+    RFC 6749 §6 requires confidential clients to authenticate when refreshing
+    tokens; we also enforce on authorization_code grants. Uses
+    ``secrets.compare_digest`` to avoid timing leaks on the secret comparison.
+    """
+    client_id = str(form.get("client_id", ""))
+    client_secret = str(form.get("client_secret", ""))
+    if not client_id:
+        raise HTTPException(status_code=401, detail="invalid_client")
+    client = cleanup_and_get(registered_clients, client_id)
+    stored_secret = ""
+    if isinstance(client, dict):
+        stored_secret = str(client.get("client_secret", ""))
+    if not client or not secrets.compare_digest(stored_secret, client_secret):
+        raise HTTPException(status_code=401, detail="invalid_client")
+    return client
+
+
+def _store_or_503(
+    store: dict[str, dict[str, Any]],
+    key: str,
+    value: dict[str, Any],
+    name: str,
+) -> None:
+    """Wrap ``cleanup_and_store`` to convert ``StoreFullError`` into RFC 6749 503.
+
+    Without this wrapper, hitting ``MAX_ENTRIES_PER_DICT`` surfaces as an
+    unhandled 500 with a stack trace; per RFC 6749 §5.2 a 503 with
+    ``temporarily_unavailable`` is the spec-compliant response.
+    """
+    try:
+        cleanup_and_store(store, key, value)
+    except StoreFullError:
+        logger.error("MCP OAuth: %s store full", name)
+        raise HTTPException(
+            status_code=503,
+            detail="OAuth state store at capacity, retry later",
+        ) from None
+
+
 def _issue_token_response(
     user_id: str, email: str | None, client_id: str, scope: str
 ) -> JSONResponse:
@@ -102,7 +148,7 @@ def _issue_token_response(
 
     access_token = _create_jwt(user_id, email)
     refresh_token = secrets.token_urlsafe(32)
-    cleanup_and_store(
+    _store_or_503(
         refresh_tokens,
         refresh_token,
         {
@@ -113,6 +159,7 @@ def _issue_token_response(
             "expires_at": datetime.now(UTC)
             + timedelta(seconds=REFRESH_TOKEN_TTL_SECONDS),
         },
+        "refresh_tokens",
     )
     return JSONResponse(
         {
@@ -173,17 +220,26 @@ def register_routes(mcp_obj: FastMCP) -> None:
     async def oauth_register(request: Request) -> Response:
         try:
             body = await request.json()
-        except Exception:
+        except (json.JSONDecodeError, UnicodeDecodeError):
             body = {}
         if not isinstance(body, dict):
             body = {}
+
+        redirect_uris = body.get("redirect_uris", [])
+        if not isinstance(redirect_uris, list) or not all(
+            isinstance(u, str) for u in redirect_uris
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail="redirect_uris must be a JSON array of strings",
+            )
 
         client_id = uuid.uuid4().hex
         client_secret = secrets.token_urlsafe(32)
         client = {
             "client_id": client_id,
             "client_secret": client_secret,
-            "redirect_uris": body.get("redirect_uris", []),
+            "redirect_uris": redirect_uris,
             "client_name": body.get("client_name", ""),
             "grant_types": body.get("grant_types", ["authorization_code"]),
             "response_types": body.get("response_types", ["code"]),
@@ -192,7 +248,7 @@ def register_routes(mcp_obj: FastMCP) -> None:
             ),
             "scope": body.get("scope", "mcp"),
         }
-        cleanup_and_store(registered_clients, client_id, client)
+        _store_or_503(registered_clients, client_id, client, "registered_clients")
         logger.info(
             "MCP OAuth: registered client %s (%s)",
             client_id,
@@ -246,13 +302,14 @@ def register_routes(mcp_obj: FastMCP) -> None:
             raise HTTPException(
                 status_code=400, detail="code_challenge is required (PKCE required)"
             )
-        registered = registered_clients.get(client_id)
+        registered = cleanup_and_get(registered_clients, client_id)
         if not registered:
             raise HTTPException(
                 status_code=400,
                 detail="Unknown client_id — register first via POST /oauth/register",
             )
-        if redirect_uri not in registered.get("redirect_uris", []):
+        registered_uris = registered.get("redirect_uris", [])
+        if not isinstance(registered_uris, list) or redirect_uri not in registered_uris:
             raise HTTPException(
                 status_code=400, detail="redirect_uri not registered for this client"
             )
@@ -261,7 +318,7 @@ def register_routes(mcp_obj: FastMCP) -> None:
         supabase_code_verifier = secrets.token_urlsafe(64)
         supabase_code_challenge = _pkce_s256(supabase_code_verifier)
 
-        cleanup_and_store(
+        _store_or_503(
             oauth_sessions,
             server_state,
             {
@@ -275,6 +332,7 @@ def register_routes(mcp_obj: FastMCP) -> None:
                 "expires_at": datetime.now(UTC)
                 + timedelta(seconds=SESSION_TTL_SECONDS),
             },
+            "oauth_sessions",
         )
         logger.info(
             "MCP OAuth: authorize redirect for client %s → Supabase",
@@ -328,9 +386,19 @@ def register_routes(mcp_obj: FastMCP) -> None:
                     },
                 )
             if resp.status_code != 200:
+                err_summary: Any
+                try:
+                    err_body = resp.json()
+                    err_summary = {
+                        "error": err_body.get("error"),
+                        "error_description": err_body.get("error_description"),
+                    }
+                except ValueError:
+                    err_summary = resp.text[:200]
                 logger.warning(
-                    "MCP OAuth: Supabase token exchange failed: status=%s",
+                    "MCP OAuth: Supabase token exchange failed: status=%s body=%s",
                     resp.status_code,
+                    err_summary,
                 )
                 return _redirect({"error": "server_error", "state": client_state})
             token_payload = resp.json()
@@ -340,6 +408,10 @@ def register_routes(mcp_obj: FastMCP) -> None:
 
         access_token = token_payload.get("access_token", "")
         if not access_token:
+            logger.warning(
+                "MCP OAuth: Supabase response missing access_token; keys=%s",
+                list(token_payload.keys()),
+            )
             return _redirect({"error": "server_error", "state": client_state})
 
         try:
@@ -356,11 +428,14 @@ def register_routes(mcp_obj: FastMCP) -> None:
         user_id = claims.get("sub")
         email = claims.get("email")
         if not user_id:
+            logger.warning(
+                "MCP OAuth: Supabase JWT missing sub claim; claim_keys=%s",
+                list(claims.keys()),
+            )
             return _redirect({"error": "server_error", "state": client_state})
 
-        # Mint our own auth code; bind to the MCP client's PKCE challenge.
         kindred_auth_code = secrets.token_urlsafe(32)
-        cleanup_and_store(
+        _store_or_503(
             auth_codes,
             kindred_auth_code,
             {
@@ -374,6 +449,7 @@ def register_routes(mcp_obj: FastMCP) -> None:
                 "expires_at": datetime.now(UTC)
                 + timedelta(seconds=AUTH_CODE_TTL_SECONDS),
             },
+            "auth_codes",
         )
         logger.info(
             "MCP OAuth: callback complete; redirecting to client %s",
@@ -392,6 +468,12 @@ def register_routes(mcp_obj: FastMCP) -> None:
         form = await request.form()
         grant_type = str(form.get("grant_type", ""))
 
+        # RFC 6749 §6 — confidential clients (registered with
+        # token_endpoint_auth_method=client_secret_post, our default) must
+        # authenticate on every token request, including refresh.
+        client = _authenticate_client(form)
+        client_id = str(client["client_id"])
+
         if grant_type == "refresh_token":
             refresh_token = str(form.get("refresh_token", ""))
             if not refresh_token:
@@ -403,10 +485,14 @@ def register_routes(mcp_obj: FastMCP) -> None:
                 raise HTTPException(
                     status_code=400, detail="Invalid or expired refresh_token"
                 )
+            if session.get("client_id") != client_id:
+                raise HTTPException(
+                    status_code=400, detail="refresh_token issued to a different client"
+                )
             return _issue_token_response(
                 session["user_id"],
                 session.get("email"),
-                session["client_id"],
+                client_id,
                 session.get("scope", "mcp"),
             )
 
@@ -415,7 +501,6 @@ def register_routes(mcp_obj: FastMCP) -> None:
 
         code = str(form.get("code", ""))
         redirect_uri = str(form.get("redirect_uri", ""))
-        client_id = str(form.get("client_id", ""))
         code_verifier = str(form.get("code_verifier", ""))
 
         session = cleanup_and_pop(auth_codes, code)
@@ -425,6 +510,10 @@ def register_routes(mcp_obj: FastMCP) -> None:
             )
         if redirect_uri != session["redirect_uri"]:
             raise HTTPException(status_code=400, detail="redirect_uri mismatch")
+        if session.get("client_id") != client_id:
+            raise HTTPException(
+                status_code=400, detail="authorization code issued to a different client"
+            )
 
         if session.get("code_challenge_method") == "S256":
             if not code_verifier:
@@ -437,6 +526,6 @@ def register_routes(mcp_obj: FastMCP) -> None:
         return _issue_token_response(
             session["user_id"],
             session.get("email"),
-            client_id or session.get("client_id", ""),
+            client_id,
             session.get("scope", "mcp"),
         )

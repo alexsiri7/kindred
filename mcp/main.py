@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Awaitable, Callable, MutableMapping
 from pathlib import Path
 from typing import Any
@@ -15,6 +16,8 @@ from settings import settings
 from tools import entries as entry_tools
 from tools import patterns as pattern_tools
 
+logger = logging.getLogger(__name__)
+
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
 
 if settings.sentry_dsn:
@@ -22,6 +25,12 @@ if settings.sentry_dsn:
         dsn=settings.sentry_dsn,
         traces_sample_rate=0.1,
         environment="production",
+    )
+
+if not settings.mcp_base_url:
+    logger.warning(
+        "MCP_BASE_URL is not configured; OAuth discovery URLs in 401 "
+        "responses will be relative and not RFC 9728 compliant."
     )
 
 _allowed_hosts = [h.strip() for h in settings.mcp_allowed_hosts.split(",") if h.strip()]
@@ -89,11 +98,20 @@ Send = Callable[[MutableMapping[str, Any]], Awaitable[None]]
 ASGIApp = Callable[[Scope, Receive, Send], Awaitable[None]]
 
 
-_PUBLIC_PATH_PREFIXES = ("/.well-known/", "/oauth/")
+_PUBLIC_PATHS = frozenset(
+    {
+        "/.well-known/oauth-protected-resource",
+        "/.well-known/oauth-authorization-server",
+        "/oauth/register",
+        "/oauth/authorize",
+        "/oauth/callback",
+        "/oauth/token",
+    }
+)
 
 
 def _is_public_path(path: str) -> bool:
-    return any(path.startswith(p) for p in _PUBLIC_PATH_PREFIXES)
+    return path in _PUBLIC_PATHS
 
 
 def with_user_context(app: ASGIApp) -> ASGIApp:
@@ -125,8 +143,11 @@ def with_user_context(app: ASGIApp) -> ASGIApp:
 
         user_id: str | None = None
         if token:
-            # JWTs always start with "eyJ" (base64 of '{"...'); try JWT first,
-            # then fall through to the connector-token DB lookup.
+            # JWTs always start with "eyJ" (base64 of '{"...'); skipping that
+            # check on opaque connector tokens avoids a wasted decode + secret
+            # check on every legacy request. Even when the prefix matches by
+            # chance (~1 / 262_144 for a urlsafe-base64 connector token), the
+            # JWT decode will fail and we fall through to the DB lookup below.
             if token.startswith("eyJ"):
                 user_id = resolve_user_id_from_jwt(token)
             if user_id is None:
@@ -140,10 +161,17 @@ def with_user_context(app: ASGIApp) -> ASGIApp:
                 current_user_id.reset(ctx_token)
             return
 
+        logger.debug(
+            "auth: 401 on path=%s token_present=%s scheme=%s",
+            path,
+            bool(token),
+            auth.split(" ", 1)[0].lower() if auth else "",
+        )
+
         # Unauthenticated request to a protected path → 401 with the
         # RFC 9728 resource_metadata pointer so MCP clients can discover
-        # the OAuth flow. Public OAuth/discovery routes are served by
-        # FastMCP's custom_route registration before middleware reaches them.
+        # the OAuth flow. Public OAuth/discovery routes never reach this
+        # branch — they short-circuit at the `_is_public_path` check above.
         base = settings.mcp_base_url.rstrip("/") if settings.mcp_base_url else ""
         resource_metadata_url = f"{base}/.well-known/oauth-protected-resource"
         www_auth = f'Bearer realm="kindred", resource_metadata="{resource_metadata_url}"'

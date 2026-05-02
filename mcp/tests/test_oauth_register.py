@@ -80,3 +80,49 @@ async def test_register_supplies_defaults_for_omitted_fields(
     assert data["grant_types"] == ["authorization_code"]
     assert data["response_types"] == ["code"]
     assert data["scope"] == "mcp"
+
+
+async def test_register_rejects_non_list_redirect_uris(
+    client: httpx.AsyncClient,
+) -> None:
+    """RFC 7591 specifies redirect_uris as a JSON array of strings.
+
+    Without this validation, the in-membership check at /oauth/authorize
+    degrades to substring matching and an attacker can craft a redirect_uri
+    that's a substring of the registered string.
+    """
+    res = await client.post(
+        "/oauth/register",
+        json={"redirect_uris": "https://app.example.com/cb"},
+    )
+    assert res.status_code == 400
+
+
+async def test_register_rejects_non_string_redirect_uri_elements(
+    client: httpx.AsyncClient,
+) -> None:
+    res = await client.post(
+        "/oauth/register",
+        json={"redirect_uris": ["https://ok/cb", 123]},
+    )
+    assert res.status_code == 400
+
+
+async def test_register_with_malformed_json_uses_defaults(
+    client: httpx.AsyncClient,
+) -> None:
+    res = await client.post(
+        "/oauth/register",
+        content=b"not-valid-json{{{",
+        headers={"content-type": "application/json"},
+    )
+    assert res.status_code == 201
+    assert res.json()["scope"] == "mcp"
+
+
+async def test_register_with_array_body_uses_defaults(
+    client: httpx.AsyncClient,
+) -> None:
+    res = await client.post("/oauth/register", json=[1, 2, 3])
+    assert res.status_code == 201
+    assert res.json()["grant_types"] == ["authorization_code"]

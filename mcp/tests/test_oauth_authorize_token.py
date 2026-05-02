@@ -166,11 +166,34 @@ async def test_authorize_rejects_unknown_client_id(client: httpx.AsyncClient) ->
 # ---------------------------------------------------------------------------
 
 
-def _seed_auth_code(*, code: str, verifier: str, redirect_uri: str) -> None:
+TEST_CLIENT_ID = "test-client"
+TEST_CLIENT_SECRET = "test-client-secret-do-not-use"
+
+
+def _seed_auth_code(
+    *,
+    code: str,
+    verifier: str,
+    redirect_uri: str,
+    client_id: str = TEST_CLIENT_ID,
+) -> None:
     challenge = (
         base64.urlsafe_b64encode(hashlib.sha256(verifier.encode("ascii")).digest())
         .rstrip(b"=")
         .decode("ascii")
+    )
+    oauth_state.registered_clients.setdefault(
+        client_id,
+        {
+            "client_id": client_id,
+            "client_secret": TEST_CLIENT_SECRET,
+            "redirect_uris": [redirect_uri],
+            "client_name": "test",
+            "grant_types": ["authorization_code"],
+            "response_types": ["code"],
+            "token_endpoint_auth_method": "client_secret_post",
+            "scope": "mcp",
+        },
     )
     oauth_state.auth_codes[code] = {
         "user_id": USER_ID,
@@ -179,7 +202,7 @@ def _seed_auth_code(*, code: str, verifier: str, redirect_uri: str) -> None:
         "code_challenge_method": "S256",
         "redirect_uri": redirect_uri,
         "scope": "mcp",
-        "client_id": "test-client",
+        "client_id": client_id,
         "expires_at": datetime.now(UTC) + timedelta(minutes=5),
     }
 
@@ -194,7 +217,8 @@ async def test_token_authorization_code_returns_jwt(client: httpx.AsyncClient) -
             "code": "ac-1",
             "redirect_uri": "https://app/cb",
             "code_verifier": verifier,
-            "client_id": "test-client",
+            "client_id": TEST_CLIENT_ID,
+            "client_secret": TEST_CLIENT_SECRET,
         },
     )
     assert res.status_code == 200
@@ -216,6 +240,8 @@ async def test_token_rejects_wrong_verifier(client: httpx.AsyncClient) -> None:
             "code": "ac-2",
             "redirect_uri": "https://app/cb",
             "code_verifier": "the-wrong-verifier",
+            "client_id": TEST_CLIENT_ID,
+            "client_secret": TEST_CLIENT_SECRET,
         },
     )
     assert res.status_code == 400
@@ -231,6 +257,8 @@ async def test_token_rejects_redirect_uri_mismatch(client: httpx.AsyncClient) ->
             "code": "ac-3",
             "redirect_uri": "https://wrong.example/cb",
             "code_verifier": verifier,
+            "client_id": TEST_CLIENT_ID,
+            "client_secret": TEST_CLIENT_SECRET,
         },
     )
     assert res.status_code == 400
@@ -244,11 +272,156 @@ async def test_token_auth_code_is_single_use(client: httpx.AsyncClient) -> None:
         "code": "ac-4",
         "redirect_uri": "https://app/cb",
         "code_verifier": verifier,
+        "client_id": TEST_CLIENT_ID,
+        "client_secret": TEST_CLIENT_SECRET,
     }
     r1 = await client.post("/oauth/token", data=data)
     r2 = await client.post("/oauth/token", data=data)
     assert r1.status_code == 200
     assert r2.status_code == 400
+
+
+async def test_token_rejects_invalid_client_secret(client: httpx.AsyncClient) -> None:
+    verifier, _ = _pkce_pair()
+    _seed_auth_code(code="ac-bad-secret", verifier=verifier, redirect_uri="https://app/cb")
+    res = await client.post(
+        "/oauth/token",
+        data={
+            "grant_type": "authorization_code",
+            "code": "ac-bad-secret",
+            "redirect_uri": "https://app/cb",
+            "code_verifier": verifier,
+            "client_id": TEST_CLIENT_ID,
+            "client_secret": "wrong-secret",
+        },
+    )
+    assert res.status_code == 401
+
+
+async def test_token_rejects_missing_client_id(client: httpx.AsyncClient) -> None:
+    verifier, _ = _pkce_pair()
+    _seed_auth_code(code="ac-no-client", verifier=verifier, redirect_uri="https://app/cb")
+    res = await client.post(
+        "/oauth/token",
+        data={
+            "grant_type": "authorization_code",
+            "code": "ac-no-client",
+            "redirect_uri": "https://app/cb",
+            "code_verifier": verifier,
+        },
+    )
+    assert res.status_code == 401
+
+
+def _register_test_client_in_state() -> None:
+    oauth_state.registered_clients[TEST_CLIENT_ID] = {
+        "client_id": TEST_CLIENT_ID,
+        "client_secret": TEST_CLIENT_SECRET,
+        "redirect_uris": ["https://app/cb"],
+        "client_name": "test",
+        "grant_types": ["authorization_code"],
+        "response_types": ["code"],
+        "token_endpoint_auth_method": "client_secret_post",
+        "scope": "mcp",
+    }
+
+
+async def test_token_rejects_unsupported_grant_type(client: httpx.AsyncClient) -> None:
+    _register_test_client_in_state()
+    res = await client.post(
+        "/oauth/token",
+        data={
+            "grant_type": "client_credentials",
+            "client_id": TEST_CLIENT_ID,
+            "client_secret": TEST_CLIENT_SECRET,
+        },
+    )
+    assert res.status_code == 400
+
+
+async def test_token_refresh_rejects_missing_token(client: httpx.AsyncClient) -> None:
+    _register_test_client_in_state()
+    res = await client.post(
+        "/oauth/token",
+        data={
+            "grant_type": "refresh_token",
+            "client_id": TEST_CLIENT_ID,
+            "client_secret": TEST_CLIENT_SECRET,
+        },
+    )
+    assert res.status_code == 400
+
+
+async def test_token_rejects_missing_code_verifier(client: httpx.AsyncClient) -> None:
+    """Auth code seeded with S256 challenge — token request must include verifier."""
+    verifier, _ = _pkce_pair()
+    _seed_auth_code(
+        code="ac-no-verifier", verifier=verifier, redirect_uri="https://app/cb"
+    )
+    res = await client.post(
+        "/oauth/token",
+        data={
+            "grant_type": "authorization_code",
+            "code": "ac-no-verifier",
+            "redirect_uri": "https://app/cb",
+            "client_id": TEST_CLIENT_ID,
+            "client_secret": TEST_CLIENT_SECRET,
+        },
+    )
+    assert res.status_code == 400
+
+
+async def test_authorize_returns_501_when_secret_key_unset(
+    monkeypatch: pytest.MonkeyPatch, client: httpx.AsyncClient
+) -> None:
+    monkeypatch.setattr(settings_module.settings, "secret_key", "")
+    res = await client.get(
+        "/oauth/authorize",
+        params={
+            "client_id": "x",
+            "redirect_uri": "https://app/cb",
+            "code_challenge": "c",
+            "code_challenge_method": "S256",
+        },
+        follow_redirects=False,
+    )
+    assert res.status_code == 501
+
+
+async def test_authorize_rejects_unsupported_response_type(
+    client: httpx.AsyncClient,
+) -> None:
+    cid = await _register(client)
+    _v, challenge = _pkce_pair()
+    res = await client.get(
+        "/oauth/authorize",
+        params={
+            "client_id": cid,
+            "redirect_uri": "https://app/cb",
+            "code_challenge": challenge,
+            "code_challenge_method": "S256",
+            "response_type": "token",
+        },
+        follow_redirects=False,
+    )
+    assert res.status_code == 400
+
+
+async def test_authorize_rejects_missing_redirect_uri(
+    client: httpx.AsyncClient,
+) -> None:
+    cid = await _register(client)
+    _v, challenge = _pkce_pair()
+    res = await client.get(
+        "/oauth/authorize",
+        params={
+            "client_id": cid,
+            "code_challenge": challenge,
+            "code_challenge_method": "S256",
+        },
+        follow_redirects=False,
+    )
+    assert res.status_code == 400
 
 
 # ---------------------------------------------------------------------------
@@ -266,13 +439,20 @@ async def test_refresh_token_rotation(client: httpx.AsyncClient) -> None:
             "code": "ac-5",
             "redirect_uri": "https://app/cb",
             "code_verifier": verifier,
+            "client_id": TEST_CLIENT_ID,
+            "client_secret": TEST_CLIENT_SECRET,
         },
     )
     refresh_1 = r1.json()["refresh_token"]
 
     r2 = await client.post(
         "/oauth/token",
-        data={"grant_type": "refresh_token", "refresh_token": refresh_1},
+        data={
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_1,
+            "client_id": TEST_CLIENT_ID,
+            "client_secret": TEST_CLIENT_SECRET,
+        },
     )
     assert r2.status_code == 200
     body = r2.json()
@@ -284,6 +464,11 @@ async def test_refresh_token_rotation(client: httpx.AsyncClient) -> None:
     # Old refresh token must now be rejected (single-use rotation).
     r3 = await client.post(
         "/oauth/token",
-        data={"grant_type": "refresh_token", "refresh_token": refresh_1},
+        data={
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_1,
+            "client_id": TEST_CLIENT_ID,
+            "client_secret": TEST_CLIENT_SECRET,
+        },
     )
     assert r3.status_code == 400

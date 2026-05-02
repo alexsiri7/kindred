@@ -73,7 +73,7 @@ User clicks "Sign in with Google" on the web app. Supabase Auth handles the OAut
 
 ### MCP server — MCP OAuth 2.1
 
-The current MCP spec supports OAuth 2.1 between MCP clients and servers. When a user adds the Kindred connector to Claude.ai, Claude.ai initiates an OAuth flow against the MCP server. The MCP server delegates to Supabase: it redirects the user to a `/mcp/oauth/authorize` page, which checks for a Supabase session (logging the user in via Google if needed), then issues an OAuth code + access token bound to that Supabase user.
+The current MCP spec supports OAuth 2.1 between MCP clients and servers. When a user adds the Kindred connector to Claude.ai, Claude.ai initiates an OAuth flow against the MCP server. The MCP server delegates to Supabase: it redirects the user to `/oauth/authorize`, which checks for a Supabase session (logging the user in via Google if needed), then issues an OAuth code + access token bound to that Supabase user.
 
 On every MCP tool call, the server validates the bearer token, resolves the Supabase user, and queries Postgres with that user's identity in scope (so RLS applies).
 

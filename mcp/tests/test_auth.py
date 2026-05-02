@@ -107,3 +107,120 @@ async def test_middleware_returns_401_with_www_authenticate(
         'resource_metadata="https://test.example.com/.well-known/oauth-protected-resource"'
         in www_auth
     )
+
+
+def test_resolve_user_id_from_jwt_missing_sub(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings_module.settings, "secret_key", SECRET)
+    token = jwt.encode({"foo": "bar"}, SECRET, algorithm="HS256")
+    assert resolve_user_id_from_jwt(token) is None
+
+
+@pytest.mark.asyncio
+async def test_middleware_accepts_valid_jwt(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings_module.settings, "secret_key", SECRET)
+    monkeypatch.setattr(
+        settings_module.settings, "mcp_base_url", "https://test.example.com"
+    )
+    token = jwt.encode(
+        {
+            "sub": USER_ID,
+            "exp": int((datetime.now(UTC) + timedelta(hours=1)).timestamp()),
+        },
+        SECRET,
+        algorithm="HS256",
+    )
+    from main import app
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as c:
+        res = await c.post("/mcp/", headers={"Authorization": f"Bearer {token}"})
+    assert res.status_code != 401
+
+
+@pytest.mark.asyncio
+async def test_middleware_falls_through_to_connector_token_when_jwt_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A token starting with 'eyJ' that fails JWT decode must still try DB lookup."""
+    monkeypatch.setattr(settings_module.settings, "secret_key", SECRET)
+    monkeypatch.setattr(
+        settings_module.settings, "mcp_base_url", "https://test.example.com"
+    )
+
+    fake_token = "eyJnot-a-real-jwt"
+    called_with: dict[str, str] = {}
+
+    def _fake_lookup(t: str) -> dict[str, Any]:
+        called_with["token"] = t
+        return {"user_id": USER_ID, "token": t}
+
+    monkeypatch.setattr(db, "lookup_connector_token", _fake_lookup)
+    from main import app
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as c:
+        res = await c.post(
+            "/mcp/", headers={"Authorization": f"Bearer {fake_token}"}
+        )
+    assert called_with["token"] == fake_token
+    assert res.status_code != 401
+
+
+@pytest.mark.asyncio
+async def test_middleware_resets_contextvar_after_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """current_user_id must NOT leak between requests."""
+    from auth import current_user_id
+
+    monkeypatch.setattr(settings_module.settings, "secret_key", SECRET)
+    monkeypatch.setattr(
+        settings_module.settings, "mcp_base_url", "https://test.example.com"
+    )
+    token = jwt.encode(
+        {"sub": USER_ID, "exp": 9999999999},
+        SECRET,
+        algorithm="HS256",
+    )
+    from main import app
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as c:
+        await c.post("/mcp/", headers={"Authorization": f"Bearer {token}"})
+    with pytest.raises(LookupError):
+        current_user_id.get()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("path", "expect_401"),
+    [
+        ("/.well-known/oauth-protected-resource", False),
+        ("/.well-known/oauth-authorization-server", False),
+        ("/oauth/register", False),
+        ("/mcp/", True),
+        ("/.well-known", True),
+        ("/oauth", True),
+        ("/oauth-fake/admin", True),
+        ("/oauth/admin", True),
+    ],
+)
+async def test_middleware_public_path_whitelist(
+    monkeypatch: pytest.MonkeyPatch, path: str, expect_401: bool
+) -> None:
+    monkeypatch.setattr(
+        settings_module.settings, "mcp_base_url", "https://test.example.com"
+    )
+    from main import app
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as c:
+        res = await c.get(path)
+    if expect_401:
+        assert res.status_code == 401, f"{path} should be auth-protected"
+    else:
+        assert res.status_code != 401, f"{path} should bypass auth"

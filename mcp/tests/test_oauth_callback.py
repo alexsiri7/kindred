@@ -175,3 +175,103 @@ async def test_callback_jwt_decode_failure_redirects_with_error(
     assert res.status_code == 302
     qs = parse_qs(urlparse(res.headers["location"]).query)
     assert qs["error"] == ["server_error"]
+
+
+async def test_callback_state_is_single_use(
+    monkeypatch: pytest.MonkeyPatch, client: httpx.AsyncClient
+) -> None:
+    """Replaying the same state must fail — guards against OAuth state CSRF."""
+    _seed_session("server-state-replay")
+    supabase_jwt = _make_supabase_jwt()
+    _FakeAsyncClient.response = _StubResponse(200, {"access_token": supabase_jwt})
+    monkeypatch.setattr(oauth_module.httpx, "AsyncClient", _FakeAsyncClient)
+
+    r1 = await client.get(
+        "/oauth/callback",
+        params={"code": "supabase-code", "state": "server-state-replay"},
+        follow_redirects=False,
+    )
+    r2 = await client.get(
+        "/oauth/callback",
+        params={"code": "supabase-code", "state": "server-state-replay"},
+        follow_redirects=False,
+    )
+    assert r1.status_code == 302
+    assert r2.status_code == 400
+
+
+async def test_callback_missing_supabase_code_redirects_invalid_request(
+    client: httpx.AsyncClient,
+) -> None:
+    _seed_session("server-state-no-code")
+    res = await client.get(
+        "/oauth/callback",
+        params={"state": "server-state-no-code"},
+        follow_redirects=False,
+    )
+    assert res.status_code == 302
+    qs = parse_qs(urlparse(res.headers["location"]).query)
+    assert qs["error"] == ["invalid_request"]
+
+
+async def test_callback_supabase_response_missing_access_token(
+    monkeypatch: pytest.MonkeyPatch, client: httpx.AsyncClient
+) -> None:
+    _seed_session("server-state-no-at")
+    _FakeAsyncClient.response = _StubResponse(200, {"unexpected": "shape"})
+    monkeypatch.setattr(oauth_module.httpx, "AsyncClient", _FakeAsyncClient)
+
+    res = await client.get(
+        "/oauth/callback",
+        params={"code": "x", "state": "server-state-no-at"},
+        follow_redirects=False,
+    )
+    assert res.status_code == 302
+    qs = parse_qs(urlparse(res.headers["location"]).query)
+    assert qs["error"] == ["server_error"]
+
+
+async def test_callback_supabase_jwt_missing_sub(
+    monkeypatch: pytest.MonkeyPatch, client: httpx.AsyncClient
+) -> None:
+    _seed_session("server-state-no-sub")
+    no_sub_jwt = jwt.encode(
+        {
+            "aud": "authenticated",
+            "exp": int((datetime.now(UTC) + timedelta(hours=1)).timestamp()),
+        },
+        SUPABASE_JWT_SECRET,
+        algorithm="HS256",
+    )
+    _FakeAsyncClient.response = _StubResponse(200, {"access_token": no_sub_jwt})
+    monkeypatch.setattr(oauth_module.httpx, "AsyncClient", _FakeAsyncClient)
+
+    res = await client.get(
+        "/oauth/callback",
+        params={"code": "x", "state": "server-state-no-sub"},
+        follow_redirects=False,
+    )
+    assert res.status_code == 302
+    qs = parse_qs(urlparse(res.headers["location"]).query)
+    assert qs["error"] == ["server_error"]
+
+
+async def test_callback_httpx_error_redirects_server_error(
+    monkeypatch: pytest.MonkeyPatch, client: httpx.AsyncClient
+) -> None:
+    """Transient Supabase outage must return a clean redirect, not a 500."""
+    _seed_session("server-state-httpx-err")
+
+    class _ExplodingClient(_FakeAsyncClient):
+        async def post(self, *_args: Any, **_kw: Any) -> _StubResponse:
+            raise httpx.ConnectError("Supabase unreachable")
+
+    monkeypatch.setattr(oauth_module.httpx, "AsyncClient", _ExplodingClient)
+    res = await client.get(
+        "/oauth/callback",
+        params={"code": "x", "state": "server-state-httpx-err"},
+        follow_redirects=False,
+    )
+    assert res.status_code == 302
+    qs = parse_qs(urlparse(res.headers["location"]).query)
+    assert qs["error"] == ["server_error"]

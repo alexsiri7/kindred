@@ -55,3 +55,11 @@ async def test_protected_resource_metadata_501_when_base_url_unset(
     monkeypatch.setattr(settings_module.settings, "mcp_base_url", "")
     res = await client.get("/.well-known/oauth-protected-resource")
     assert res.status_code == 501
+
+
+async def test_authorization_server_metadata_501_when_base_url_unset(
+    monkeypatch: pytest.MonkeyPatch, client: httpx.AsyncClient
+) -> None:
+    monkeypatch.setattr(settings_module.settings, "mcp_base_url", "")
+    res = await client.get("/.well-known/oauth-authorization-server")
+    assert res.status_code == 501

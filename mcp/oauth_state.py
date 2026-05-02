@@ -1,6 +1,6 @@
 """Shared in-memory state for the MCP OAuth 2.1 flow.
 
-Four bounded dicts back the seven endpoints in ``oauth.py``. Expired entries
+Four bounded dicts back the six endpoints in ``oauth.py``. Expired entries
 are lazily purged on every store/retrieve, and each dict is hard-capped at
 ``MAX_ENTRIES_PER_DICT`` to avoid unbounded growth. Persistence is intentionally
 not implemented — Railway redeploys are infrequent enough that re-registering
@@ -19,8 +19,9 @@ logger = logging.getLogger(__name__)
 
 MAX_ENTRIES_PER_DICT = 10_000
 
-# Lock protecting all mutable state dicts below against concurrent access
-# from threadpool-dispatched sync endpoints.
+# Lock protecting all mutable state dicts below. _cleanup_expired does a
+# multi-step iterate-then-delete that isn't atomic; the lock ensures a
+# consistent view under multi-threaded ASGI workers.
 _state_lock = threading.Lock()
 
 Entry = dict[str, Any]
@@ -32,7 +33,8 @@ Entry = dict[str, Any]
 oauth_sessions: dict[str, Entry] = {}
 
 # auth_code -> {
-#   user_id, email, code_challenge, code_challenge_method, redirect_uri, expires_at
+#   user_id, email, code_challenge, code_challenge_method, redirect_uri,
+#   scope, client_id, expires_at
 # }
 auth_codes: dict[str, Entry] = {}
 
@@ -75,7 +77,8 @@ def _cleanup_expired(store: dict[str, Entry]) -> None:
 
 
 class StoreFullError(Exception):
-    """Raised when a bounded dict exceeds MAX_ENTRIES_PER_DICT after cleanup."""
+    """Raised when a bounded dict has reached MAX_ENTRIES_PER_DICT entries
+    after cleanup and cannot accept a new insertion."""
 
 
 def cleanup_and_store(store: dict[str, Entry], key: str, value: Entry) -> None:
