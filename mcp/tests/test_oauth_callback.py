@@ -24,6 +24,10 @@ def _settings(monkeypatch: pytest.MonkeyPatch) -> None:
         settings_module.settings, "mcp_base_url", "https://test.example.com"
     )
     monkeypatch.setattr(
+        settings_module.settings, "supabase_url", "https://supabase.test.example.com"
+    )
+    monkeypatch.setattr(settings_module.settings, "supabase_anon_key", "test-anon-key")
+    monkeypatch.setattr(
         settings_module.settings, "supabase_jwt_secret", SUPABASE_JWT_SECRET
     )
     monkeypatch.setattr(
@@ -37,6 +41,32 @@ def _settings(monkeypatch: pytest.MonkeyPatch) -> None:
 def _clear_state() -> None:
     oauth_state.oauth_sessions.clear()
     oauth_state.auth_codes.clear()
+
+
+@pytest.fixture(autouse=True)
+def _stub_supabase_verify(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Stub the outbound Supabase /auth/v1/user call.
+
+    Accepts any HS256 JWT signed with ``SUPABASE_JWT_SECRET`` (mirrors what
+    real Supabase does — verifies the signature, not the exact byte string).
+    Tokens signed with a different secret raise ``PyJWTError`` and the stub
+    returns ``None``, preserving the bad-token rejection path.
+    """
+    import oauth as oauth_module
+
+    async def _fake_verify(access_token: str) -> dict | None:
+        try:
+            jwt.decode(
+                access_token,
+                SUPABASE_JWT_SECRET,
+                algorithms=["HS256"],
+                options={"verify_aud": False},
+            )
+        except jwt.PyJWTError:
+            return None
+        return {"id": USER_ID, "email": "u@example.com"}
+
+    monkeypatch.setattr(oauth_module, "_verify_supabase_token", _fake_verify)
 
 
 @pytest.fixture
