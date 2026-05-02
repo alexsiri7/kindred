@@ -30,9 +30,10 @@ async def test_protected_resource_metadata(client: httpx.AsyncClient) -> None:
     res = await client.get("/.well-known/oauth-protected-resource")
     assert res.status_code == 200
     data = res.json()
-    assert data["resource"] == f"{BASE}/mcp/"
+    assert data["resource"] == f"{BASE}/mcp"
     assert data["authorization_servers"] == [BASE]
     assert data["scopes_supported"] == ["mcp"]
+    assert data["bearer_methods_supported"] == ["header"]
 
 
 async def test_authorization_server_metadata(client: httpx.AsyncClient) -> None:
@@ -46,6 +47,7 @@ async def test_authorization_server_metadata(client: httpx.AsyncClient) -> None:
     assert data["response_types_supported"] == ["code"]
     assert data["grant_types_supported"] == ["authorization_code", "refresh_token"]
     assert data["code_challenge_methods_supported"] == ["S256"]
+    assert data["token_endpoint_auth_methods_supported"] == ["none"]
     assert data["scopes_supported"] == ["mcp"]
 
 
