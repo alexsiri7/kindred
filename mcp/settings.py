@@ -12,6 +12,11 @@ class Settings(BaseSettings):
 
     sentry_dsn: str = ""
 
+    supabase_anon_key: str = ""
+    supabase_jwt_secret: str = ""
+    mcp_base_url: str = ""
+    secret_key: str = ""
+
     mcp_host: str = "0.0.0.0"
     mcp_port: int = 8000
     mcp_allowed_hosts: str = ""
