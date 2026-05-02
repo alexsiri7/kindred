@@ -1,16 +1,12 @@
-"""Connector-token bearer auth for the MCP server.
+"""Bearer auth for the MCP server: kindred-issued JWT first, then connector token.
 
-PRD step 3 specifies a connector-token fallback while we defer MCP OAuth 2.1
-(PRD step 8). Tokens are minted via the web app's ``POST /connect/token`` route
-and pasted by the user into Claude.ai's connector config.
+PRD step 8 (issue #11) layered an OAuth 2.1 path on top of the original
+connector-token fallback (PRD step 3). The middleware in ``main.py`` calls
+``resolve_user_id_from_jwt`` first (cheap, in-memory) and falls back to
+``resolve_user_id`` (DB lookup) so existing connector tokens keep working.
 
-The user_id resolved from the bearer token is published into a
-``contextvars.ContextVar`` by an ASGI middleware in ``main.py``, so tool bodies
-can read ``current_user_id.get()`` without depending on internal SDK shape.
-
-Future migration: replace ``ConnectorTokenVerifier`` with an OAuth 2.1
-``AuthorizationServerProvider`` from ``mcp.server.auth`` once we ship step 8.
-The ``TokenVerifier`` interface lets us swap without touching tool code.
+JWT verification enforces the ``aud`` claim per RFC 8707 / the MCP authorization
+spec — tokens not bound to this server's canonical resource URL are rejected.
 """
 
 from __future__ import annotations
@@ -21,6 +17,7 @@ from contextvars import ContextVar
 from mcp.server.auth.provider import AccessToken, TokenVerifier
 
 import db
+from oauth.state import canonical_resource_url, verify_access_jwt
 
 current_user_id: ContextVar[str] = ContextVar("current_user_id")
 
@@ -42,8 +39,19 @@ class ConnectorTokenVerifier(TokenVerifier):
 
 
 async def resolve_user_id(token: str) -> str | None:
-    """Used by the ASGI middleware to populate the contextvar."""
+    """Connector-token DB lookup. Returns the user_id or None."""
     row = await asyncio.to_thread(db.lookup_connector_token, token)
     if row is None:
         return None
     return str(row["user_id"])
+
+
+def resolve_user_id_from_jwt(token: str) -> str | None:
+    """Verify a kindred-issued HS256 JWT bound to this server's canonical URL.
+
+    Returns the ``sub`` claim (user_id) or ``None`` if verification fails for
+    any reason (no secret, expired, bad signature, audience mismatch, malformed).
+    Failures are intentionally swallowed so the middleware can fall back to
+    the connector-token DB lookup.
+    """
+    return verify_access_jwt(token, expected_audience=canonical_resource_url())
