@@ -23,7 +23,7 @@ from settings import settings
 _log = logging.getLogger(__name__)
 
 _AUTH_CODE_TTL_S = 600  # 10 minutes
-_ACCESS_TOKEN_TTL_S = 3600  # 1 hour
+ACCESS_TOKEN_TTL_S = 3600  # 1 hour
 _REFRESH_TOKEN_TTL_S = 30 * 24 * 3600  # 30 days
 
 
@@ -73,12 +73,8 @@ class RefreshTokenRecord:
     expires_at: int
 
 
-# ---------------------------------------------------------------------------
-# In-process stores. Single Uvicorn worker, so the pop()-based critical
-# sections (redeem_auth_code, consume_refresh_token, pop_session) are atomic
-# between awaits under asyncio cooperative scheduling — no asyncio.Lock
-# needed at this scale. Scaling to >1 worker will require persistence.
-# ---------------------------------------------------------------------------
+# Single Uvicorn worker → pop()-based redeem/consume/pop are atomic between
+# awaits under cooperative asyncio. Scaling to >1 worker requires persistence.
 _clients: dict[str, RegisteredClient] = {}
 _sessions: dict[str, AuthSession] = {}
 _codes: dict[str, AuthCode] = {}
@@ -86,23 +82,22 @@ _refresh: dict[str, RefreshTokenRecord] = {}
 
 
 # ---------------------------------------------------------------------------
-# Canonical resource URL
+# Base URL helpers
 # ---------------------------------------------------------------------------
+
+
+def base_url() -> str:
+    """Return ``MCP_BASE_URL`` without trailing slash, or ``""`` if unset."""
+    return settings.mcp_base_url.rstrip("/") if settings.mcp_base_url else ""
 
 
 def canonical_resource_url() -> str:
     """Return ``<MCP_BASE_URL>/mcp`` with no trailing slash.
 
-    Building it once and reusing avoids the trailing-slash mismatch pitfall
-    documented in the research (claude-code issue #46539): a token minted with
-    ``aud="https://x/mcp"`` will be rejected if validation expects
-    ``"https://x/mcp/"``.
-
     Fails loud if ``MCP_BASE_URL`` is unset — RFC 8707 audience binding is
-    defeated by a relative-URL ``aud`` claim, and silent fallbacks would mask
-    misconfiguration until cross-host validation breaks.
+    defeated by a relative-URL ``aud`` claim (claude-code issue #46539).
     """
-    base = settings.mcp_base_url.rstrip("/") if settings.mcp_base_url else ""
+    base = base_url()
     if not base:
         raise RuntimeError(
             "MCP_BASE_URL is not configured; cannot derive canonical resource URL"
@@ -208,15 +203,13 @@ def redeem_auth_code(code: str, code_verifier: str, resource: str | None) -> Aut
 # ---------------------------------------------------------------------------
 
 
-def verify_pkce_s256(code_verifier: str, code_challenge: str) -> bool:
-    digest = hashlib.sha256(code_verifier.encode("ascii")).digest()
-    derived = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
-    return secrets.compare_digest(derived, code_challenge)
-
-
 def derive_pkce_s256_challenge(code_verifier: str) -> str:
     digest = hashlib.sha256(code_verifier.encode("ascii")).digest()
     return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
+
+
+def verify_pkce_s256(code_verifier: str, code_challenge: str) -> bool:
+    return secrets.compare_digest(derive_pkce_s256_challenge(code_verifier), code_challenge)
 
 
 # ---------------------------------------------------------------------------
@@ -225,14 +218,13 @@ def derive_pkce_s256_challenge(code_verifier: str) -> str:
 
 
 def mint_access_jwt(
-    *, user_id: str, audience: str, expires_in_s: int = _ACCESS_TOKEN_TTL_S
+    *, user_id: str, audience: str, expires_in_s: int = ACCESS_TOKEN_TTL_S
 ) -> str:
     if not settings.secret_key:
         raise RuntimeError("SECRET_KEY is not configured; cannot mint JWT")
     now = int(time.time())
-    issuer = settings.mcp_base_url.rstrip("/") if settings.mcp_base_url else ""
     claims: dict[str, object] = {
-        "iss": issuer,
+        "iss": base_url(),
         "sub": user_id,
         "aud": audience,
         "iat": now,
@@ -305,10 +297,12 @@ def _reset_all_for_tests() -> None:
 
 
 __all__ = [
+    "ACCESS_TOKEN_TTL_S",
     "AuthCode",
     "AuthSession",
     "RefreshTokenRecord",
     "RegisteredClient",
+    "base_url",
     "canonical_resource_url",
     "consume_refresh_token",
     "derive_pkce_s256_challenge",

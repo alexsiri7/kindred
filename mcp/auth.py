@@ -1,13 +1,5 @@
-"""Bearer auth for the MCP server: kindred-issued JWT first, then connector token.
-
-PRD step 8 (issue #11) layered an OAuth 2.1 path on top of the original
-connector-token fallback (PRD step 3). The middleware in ``main.py`` calls
-``resolve_user_id_from_jwt`` first (cheap, in-memory) and falls back to
-``resolve_user_id`` (DB lookup) so existing connector tokens keep working.
-
-JWT verification enforces the ``aud`` claim per RFC 8707 / the MCP authorization
-spec — tokens not bound to this server's canonical resource URL are rejected.
-"""
+"""Bearer auth: try kindred-issued JWT (in-memory) first, fall back to
+connector-token DB lookup. JWT path enforces RFC 8707 audience binding."""
 
 from __future__ import annotations
 

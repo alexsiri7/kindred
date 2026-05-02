@@ -11,6 +11,8 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 
 from auth import current_user_id, resolve_user_id, resolve_user_id_from_jwt
+from oauth import register_routes as _register_oauth_routes
+from oauth.state import base_url
 from settings import settings
 from tools import entries as entry_tools
 from tools import patterns as pattern_tools
@@ -40,13 +42,8 @@ mcp: FastMCP = FastMCP(
     transport_security=_transport_security,
 )
 
-# ---------------------------------------------------------------------------
-# OAuth 2.1 + discovery routes (RFC 9728/8414/7591/8707).
-# Registered via mcp.custom_route() — those routes bypass FastMCP's
-# authorization layer, which is what we want for unauthenticated discovery.
-# ---------------------------------------------------------------------------
-from oauth import register_routes as _register_oauth_routes  # noqa: E402
-
+# OAuth 2.1 + discovery routes (RFC 9728/8414/7591/8707) — registered via
+# mcp.custom_route() so they bypass FastMCP's authorization layer.
 _register_oauth_routes(mcp)
 
 
@@ -103,8 +100,14 @@ _PUBLIC_PATHS = frozenset(
 )
 
 
-def _is_public_path(path: str) -> bool:
-    return path in _PUBLIC_PATHS
+def _bearer_token(scope: Scope) -> str | None:
+    for k, v in scope.get("headers", []):
+        if k == b"authorization":
+            auth: str = v.decode("latin-1")
+            if auth[:7].lower() == "bearer ":
+                return auth[7:].strip()
+            return None
+    return None
 
 
 def with_user_context(app: ASGIApp) -> ASGIApp:
@@ -123,21 +126,15 @@ def with_user_context(app: ASGIApp) -> ASGIApp:
             )
             await send({"type": "http.response.body", "body": b'{"ok":true}'})
             return
-        if _is_public_path(path):
-            # OAuth + discovery endpoints are intentionally unauthenticated;
-            # let FastMCP's custom_route handlers serve them.
+        if path in _PUBLIC_PATHS:
             await app(scope, receive, send)
             return
-        headers = {k.decode().lower(): v.decode() for k, v in scope.get("headers", [])}
-        auth = headers.get("authorization", "")
-        token: str | None = None
-        if auth.lower().startswith("bearer "):
-            token = auth.split(" ", 1)[1].strip()
+        token = _bearer_token(scope)
 
         user_id: str | None = None
         if token:
-            # JWTs always start with "eyJ" (base64 of '{"...'); try JWT first
-            # (in-memory verify), fall back to the connector-token DB lookup.
+            # Cheap heuristic: JWT base64 header always starts with "eyJ" — try
+            # in-memory JWT verify first, fall back to connector-token DB lookup.
             if token.startswith("eyJ"):
                 user_id = resolve_user_id_from_jwt(token)
             if user_id is None:
@@ -151,11 +148,9 @@ def with_user_context(app: ASGIApp) -> ASGIApp:
                 current_user_id.reset(ctx_token)
             return
 
-        # Unauthenticated request to a protected path → 401 with the RFC 9728
-        # resource_metadata pointer so MCP clients can discover the OAuth flow.
-        # The WWW-Authenticate value MUST be an absolute URL (claude-code #46539).
-        base = settings.mcp_base_url.rstrip("/") if settings.mcp_base_url else ""
-        resource_metadata_url = f"{base}/.well-known/oauth-protected-resource"
+        # 401 with RFC 9728 resource_metadata pointer so MCP clients can
+        # discover the OAuth flow. WWW-Authenticate MUST be absolute (#46539).
+        resource_metadata_url = f"{base_url()}/.well-known/oauth-protected-resource"
         www_auth = f'Bearer realm="kindred", resource_metadata="{resource_metadata_url}"'
         await send(
             {

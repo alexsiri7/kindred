@@ -14,6 +14,7 @@ from typing import Any
 
 from supabase import Client, create_client
 
+from oauth.state import base_url
 from settings import settings
 
 
@@ -29,8 +30,7 @@ async def exchange_code(code: str, code_verifier: str) -> str:
     map to a 502 response.
     """
     client = _anon_client()
-    base = settings.mcp_base_url.rstrip("/") if settings.mcp_base_url else ""
-    redirect_to = f"{base}/oauth/callback"
+    redirect_to = f"{base_url()}/oauth/callback"
 
     def _do() -> Any:
         return client.auth.exchange_code_for_session(

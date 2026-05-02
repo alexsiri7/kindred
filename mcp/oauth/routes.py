@@ -1,8 +1,7 @@
 """Six OAuth 2.1 + RFC 9728 / RFC 8414 / RFC 7591 / RFC 8707 handlers.
 
-Registered on the FastMCP server via ``mcp.custom_route()`` from
-``oauth/__init__.py:register_routes`` — those routes bypass the
-``with_user_context`` middleware so they do not 401 on themselves.
+Registered via ``mcp.custom_route()`` so they bypass the ``with_user_context``
+middleware — discovery and OAuth endpoints must be reachable unauthenticated.
 """
 
 from __future__ import annotations
@@ -11,6 +10,7 @@ import secrets
 from typing import Any
 from urllib.parse import urlencode
 
+from mcp.server.fastmcp import FastMCP
 from starlette.requests import Request
 from starlette.responses import JSONResponse, RedirectResponse, Response
 
@@ -19,13 +19,21 @@ from oauth import supabase as oauth_supabase
 from settings import settings
 
 
-def _base_url() -> str:
-    return settings.mcp_base_url.rstrip("/") if settings.mcp_base_url else ""
-
-
 def _error(code: str, description: str, status_code: int = 400) -> JSONResponse:
     return JSONResponse(
         {"error": code, "error_description": description}, status_code=status_code
+    )
+
+
+def _token_response(*, user_id: str, audience: str) -> JSONResponse:
+    return JSONResponse(
+        {
+            "access_token": oauth_state.mint_access_jwt(user_id=user_id, audience=audience),
+            "token_type": "Bearer",
+            "expires_in": oauth_state.ACCESS_TOKEN_TTL_S,
+            "refresh_token": oauth_state.mint_refresh_token(user_id=user_id, audience=audience),
+            "scope": "mcp",
+        }
     )
 
 
@@ -36,11 +44,10 @@ def _error(code: str, description: str, status_code: int = 400) -> JSONResponse:
 
 async def oauth_protected_resource(request: Request) -> Response:
     """RFC 9728 §3 — protected-resource metadata."""
-    base = _base_url()
     return JSONResponse(
         {
             "resource": oauth_state.canonical_resource_url(),
-            "authorization_servers": [base],
+            "authorization_servers": [oauth_state.base_url()],
             "scopes_supported": ["mcp"],
             "bearer_methods_supported": ["header"],
         }
@@ -49,7 +56,7 @@ async def oauth_protected_resource(request: Request) -> Response:
 
 async def oauth_authorization_server(request: Request) -> Response:
     """RFC 8414 §3 — authorization-server metadata."""
-    base = _base_url()
+    base = oauth_state.base_url()
     return JSONResponse(
         {
             "issuer": base,
@@ -165,7 +172,7 @@ async def oauth_authorize(request: Request) -> Response:
     )
 
     supabase_url = (settings.supabase_url or "").rstrip("/")
-    redirect_to = f"{_base_url()}/oauth/callback"
+    redirect_to = f"{oauth_state.base_url()}/oauth/callback"
     upstream_qs = urlencode(
         {
             "provider": "google",
@@ -254,17 +261,7 @@ async def _token_from_auth_code(form: Any) -> Response:
         return _error("invalid_grant", "redirect_uri does not match the issued code")
 
     audience = record.resource or oauth_state.canonical_resource_url()
-    access_token = oauth_state.mint_access_jwt(user_id=record.user_id, audience=audience)
-    refresh_token = oauth_state.mint_refresh_token(user_id=record.user_id, audience=audience)
-    return JSONResponse(
-        {
-            "access_token": access_token,
-            "token_type": "Bearer",
-            "expires_in": 3600,
-            "refresh_token": refresh_token,
-            "scope": "mcp",
-        }
-    )
+    return _token_response(user_id=record.user_id, audience=audience)
 
 
 async def _token_from_refresh(form: Any) -> Response:
@@ -275,17 +272,21 @@ async def _token_from_refresh(form: Any) -> Response:
     if consumed is None:
         return _error("invalid_grant", "refresh_token is unknown or expired")
     user_id, audience = consumed
-    new_access = oauth_state.mint_access_jwt(user_id=user_id, audience=audience)
-    new_refresh = oauth_state.mint_refresh_token(user_id=user_id, audience=audience)
-    return JSONResponse(
-        {
-            "access_token": new_access,
-            "token_type": "Bearer",
-            "expires_in": 3600,
-            "refresh_token": new_refresh,
-            "scope": "mcp",
-        }
+    return _token_response(user_id=user_id, audience=audience)
+
+
+def register_routes(mcp: FastMCP) -> None:
+    """Attach the six OAuth + discovery endpoints to ``mcp``."""
+    mcp.custom_route("/.well-known/oauth-protected-resource", methods=["GET"])(
+        oauth_protected_resource
     )
+    mcp.custom_route("/.well-known/oauth-authorization-server", methods=["GET"])(
+        oauth_authorization_server
+    )
+    mcp.custom_route("/oauth/register", methods=["POST"])(oauth_register)
+    mcp.custom_route("/oauth/authorize", methods=["GET"])(oauth_authorize)
+    mcp.custom_route("/oauth/callback", methods=["GET"])(oauth_callback)
+    mcp.custom_route("/oauth/token", methods=["POST"])(oauth_token)
 
 
 __all__ = [
@@ -295,4 +296,5 @@ __all__ = [
     "oauth_protected_resource",
     "oauth_register",
     "oauth_token",
+    "register_routes",
 ]
