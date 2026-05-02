@@ -26,6 +26,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import urlencode
 
+import httpx
 import jwt
 from mcp.server.fastmcp import FastMCP
 from starlette.exceptions import HTTPException
@@ -319,23 +320,38 @@ def register_routes(mcp_obj: FastMCP) -> None:
                 headers=_CORS_HEADERS,
             )
 
+        # Verify the Supabase token via the REST API — avoids algorithm mismatch
+        # issues when the project uses RS256 rather than HS256.
         try:
-            claims = jwt.decode(
-                access_token,
-                settings.supabase_jwt_secret,
-                audience="authenticated",
-                algorithms=["HS256"],
-            )
-        except jwt.PyJWTError as exc:
-            logger.warning("MCP OAuth: Supabase JWT decode failed: %s", exc)
+            async with httpx.AsyncClient(timeout=10.0) as http:
+                user_resp = await http.get(
+                    f"{settings.supabase_url.rstrip('/')}/auth/v1/user",
+                    headers={
+                        "apikey": settings.supabase_anon_key,
+                        "Authorization": f"Bearer {access_token}",
+                    },
+                )
+        except httpx.HTTPError as exc:
+            logger.warning("MCP OAuth: Supabase user lookup failed: %s", exc)
             return JSONResponse(
                 {"error": "server_error", "error_description": "Token verification failed"},
                 status_code=400,
                 headers=_CORS_HEADERS,
             )
 
-        user_id = claims.get("sub")
-        email = claims.get("email")
+        if user_resp.status_code != 200:
+            logger.warning(
+                "MCP OAuth: Supabase /auth/v1/user returned %s", user_resp.status_code
+            )
+            return JSONResponse(
+                {"error": "server_error", "error_description": "Token verification failed"},
+                status_code=400,
+                headers=_CORS_HEADERS,
+            )
+
+        user_data = user_resp.json()
+        user_id = user_data.get("id")
+        email = user_data.get("email")
         if not user_id:
             return JSONResponse(
                 {"error": "server_error", "error_description": "No user ID in token"},

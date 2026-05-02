@@ -33,7 +33,10 @@ export function McpAuth() {
 
     setStatus('completing')
 
+    let completing = false
     async function completeFlow(accessToken: string) {
+      if (completing) return
+      completing = true
       try {
         const resp = await fetch(`${MCP_BASE}/oauth/code-from-session`, {
           method: 'POST',
