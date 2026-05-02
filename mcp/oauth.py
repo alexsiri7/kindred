@@ -67,6 +67,7 @@ def _supabase_authorize_url(server_state: str, code_challenge: str) -> str:
     params = {
         "provider": "google",
         "redirect_to": redirect_to,
+        "flow_type": "pkce",
         "code_challenge": code_challenge,
         "code_challenge_method": "S256",
         "state": server_state,
@@ -141,9 +142,10 @@ def register_routes(mcp_obj: FastMCP) -> None:
         base = _base_url()
         return JSONResponse(
             {
-                "resource": f"{base}/mcp/",
+                "resource": f"{base}/mcp",
                 "authorization_servers": [base],
                 "scopes_supported": ["mcp"],
+                "bearer_methods_supported": ["header"],
             }
         )
 
@@ -162,6 +164,7 @@ def register_routes(mcp_obj: FastMCP) -> None:
                 "response_types_supported": ["code"],
                 "grant_types_supported": ["authorization_code", "refresh_token"],
                 "code_challenge_methods_supported": ["S256"],
+                "token_endpoint_auth_methods_supported": ["none"],
                 "scopes_supported": ["mcp"],
             }
         )
