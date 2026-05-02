@@ -24,6 +24,10 @@ def _settings(monkeypatch: pytest.MonkeyPatch) -> None:
         settings_module.settings, "mcp_base_url", "https://test.example.com"
     )
     monkeypatch.setattr(
+        settings_module.settings, "supabase_url", "https://supabase.test.example.com"
+    )
+    monkeypatch.setattr(settings_module.settings, "supabase_anon_key", "test-anon-key")
+    monkeypatch.setattr(
         settings_module.settings, "supabase_jwt_secret", SUPABASE_JWT_SECRET
     )
     monkeypatch.setattr(
@@ -37,6 +41,26 @@ def _settings(monkeypatch: pytest.MonkeyPatch) -> None:
 def _clear_state() -> None:
     oauth_state.oauth_sessions.clear()
     oauth_state.auth_codes.clear()
+
+
+@pytest.fixture(autouse=True)
+def _stub_supabase_verify(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Stub the outbound Supabase /auth/v1/user call.
+
+    Returns a user payload for the canonical token minted by
+    ``_make_supabase_jwt()`` (default secret), and ``None`` for any other token
+    so the bad-token rejection path is still exercised.
+    """
+    import oauth as oauth_module
+
+    valid_token = _make_supabase_jwt()
+
+    async def _fake_verify(access_token: str) -> dict | None:
+        if access_token == valid_token:
+            return {"id": USER_ID, "email": "u@example.com"}
+        return None
+
+    monkeypatch.setattr(oauth_module, "_verify_supabase_token", _fake_verify)
 
 
 @pytest.fixture

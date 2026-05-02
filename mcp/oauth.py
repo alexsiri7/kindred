@@ -117,6 +117,34 @@ def _issue_token_response(
     )
 
 
+async def _verify_supabase_token(access_token: str) -> dict[str, Any] | None:
+    """Verify a Supabase access token via /auth/v1/user.
+
+    Returns the user payload dict on success, or ``None`` if the network call
+    fails or Supabase rejects the token. Extracted from the route handler so
+    tests can stub it without monkey-patching ``httpx`` globally.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as http:
+            resp = await http.get(
+                f"{settings.supabase_url.rstrip('/')}/auth/v1/user",
+                headers={
+                    "apikey": settings.supabase_anon_key,
+                    "Authorization": f"Bearer {access_token}",
+                },
+            )
+    except httpx.HTTPError as exc:
+        logger.warning("MCP OAuth: Supabase user lookup failed: %s", exc)
+        return None
+    if resp.status_code != 200:
+        logger.warning(
+            "MCP OAuth: Supabase /auth/v1/user returned %s", resp.status_code
+        )
+        return None
+    payload = resp.json()
+    return payload if isinstance(payload, dict) else None
+
+
 def register_routes(mcp_obj: FastMCP) -> None:
     """Register all OAuth + discovery routes on the given FastMCP instance.
 
@@ -320,36 +348,13 @@ def register_routes(mcp_obj: FastMCP) -> None:
                 headers=_CORS_HEADERS,
             )
 
-        # Verify the Supabase token via the REST API — avoids algorithm mismatch
-        # issues when the project uses RS256 rather than HS256.
-        try:
-            async with httpx.AsyncClient(timeout=10.0) as http:
-                user_resp = await http.get(
-                    f"{settings.supabase_url.rstrip('/')}/auth/v1/user",
-                    headers={
-                        "apikey": settings.supabase_anon_key,
-                        "Authorization": f"Bearer {access_token}",
-                    },
-                )
-        except httpx.HTTPError as exc:
-            logger.warning("MCP OAuth: Supabase user lookup failed: %s", exc)
+        user_data = await _verify_supabase_token(access_token)
+        if not user_data:
             return JSONResponse(
                 {"error": "server_error", "error_description": "Token verification failed"},
                 status_code=400,
                 headers=_CORS_HEADERS,
             )
-
-        if user_resp.status_code != 200:
-            logger.warning(
-                "MCP OAuth: Supabase /auth/v1/user returned %s", user_resp.status_code
-            )
-            return JSONResponse(
-                {"error": "server_error", "error_description": "Token verification failed"},
-                status_code=400,
-                headers=_CORS_HEADERS,
-            )
-
-        user_data = user_resp.json()
         user_id = user_data.get("id")
         email = user_data.get("email")
         if not user_id:
