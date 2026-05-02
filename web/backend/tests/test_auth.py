@@ -1,68 +1,79 @@
-"""Supabase JWT dependency: valid, expired, wrong audience, missing bearer."""
+"""Supabase REST-based token verification: valid, invalid, network error, missing bearer."""
 
 from __future__ import annotations
 
-import time
+from unittest.mock import AsyncMock, MagicMock, patch
 
-import jwt
 import pytest
 from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
 
 from auth import get_current_user
-from settings import settings
 
-SECRET = "test-secret-please-rotate-32-bytes-or-more"
 USER_ID = "11111111-2222-3333-4444-555555555555"
+TOKEN = "some-supabase-access-token"
 
 
-@pytest.fixture(autouse=True)
-def _set_secret(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(settings, "supabase_jwt_secret", SECRET)
-
-
-def _encode(claims: dict[str, object]) -> str:
-    return jwt.encode(claims, SECRET, algorithm="HS256")
-
-
-def _bearer(token: str) -> HTTPAuthorizationCredentials:
+def _bearer(token: str = TOKEN) -> HTTPAuthorizationCredentials:
     return HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
 
 
-def test_valid_token_returns_user() -> None:
-    token = _encode(
-        {
-            "sub": USER_ID,
-            "email": "u@example.com",
-            "aud": "authenticated",
-            "exp": int(time.time()) + 60,
-        }
-    )
-    user = get_current_user(_bearer(token))
+def _mock_supabase_response(status_code: int, json_data: dict) -> MagicMock:
+    resp = MagicMock()
+    resp.status_code = status_code
+    resp.json.return_value = json_data
+    return resp
+
+
+@pytest.mark.asyncio
+async def test_valid_token_returns_user() -> None:
+    mock_resp = _mock_supabase_response(200, {"id": USER_ID, "email": "u@example.com"})
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(return_value=mock_resp)
+
+    with patch("auth.httpx.AsyncClient") as mock_cls:
+        mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+        user = await get_current_user(_bearer())
+
     assert user["user_id"] == USER_ID
     assert user["email"] == "u@example.com"
-    assert user["jwt"] == token
+    assert user["jwt"] == TOKEN
 
 
-def test_expired_token_rejected() -> None:
-    token = _encode(
-        {"sub": USER_ID, "aud": "authenticated", "exp": int(time.time()) - 60}
-    )
-    with pytest.raises(HTTPException) as exc:
-        get_current_user(_bearer(token))
+@pytest.mark.asyncio
+async def test_invalid_token_rejected() -> None:
+    mock_resp = _mock_supabase_response(401, {"message": "Invalid JWT"})
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(return_value=mock_resp)
+
+    with patch("auth.httpx.AsyncClient") as mock_cls:
+        mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+        with pytest.raises(HTTPException) as exc:
+            await get_current_user(_bearer("expired-or-bad-token"))
+
     assert exc.value.status_code == 401
 
 
-def test_wrong_audience_rejected() -> None:
-    token = _encode(
-        {"sub": USER_ID, "aud": "service_role", "exp": int(time.time()) + 60}
-    )
-    with pytest.raises(HTTPException) as exc:
-        get_current_user(_bearer(token))
-    assert exc.value.status_code == 401
+@pytest.mark.asyncio
+async def test_network_error_raises_503() -> None:
+    import httpx
+
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(side_effect=httpx.ConnectError("timeout"))
+
+    with patch("auth.httpx.AsyncClient") as mock_cls:
+        mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+        with pytest.raises(HTTPException) as exc:
+            await get_current_user(_bearer())
+
+    assert exc.value.status_code == 503
 
 
-def test_missing_bearer_rejected() -> None:
+@pytest.mark.asyncio
+async def test_missing_bearer_rejected() -> None:
     with pytest.raises(HTTPException) as exc:
-        get_current_user(None)
+        await get_current_user(None)
     assert exc.value.status_code == 401

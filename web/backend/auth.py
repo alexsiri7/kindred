@@ -1,15 +1,14 @@
-"""Supabase JWT bearer dependency.
+"""Supabase bearer dependency — verifies tokens via the REST API.
 
-HS256 path only — most Supabase projects use the project's JWT secret.
-RS256/JWKS support is a planned upgrade once we wire to a production project
-with asymmetric signing keys.
+Calling /auth/v1/user instead of decoding locally avoids algorithm-mismatch
+issues (RS256 vs HS256) and validates token liveness against Supabase's state.
 """
 
 from __future__ import annotations
 
-from typing import Any, cast
+from typing import Any
 
-import jwt
+import httpx
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
@@ -18,7 +17,7 @@ from settings import settings
 _bearer = HTTPBearer(auto_error=False)
 
 
-def get_current_user(
+async def get_current_user(
     cred: HTTPAuthorizationCredentials | None = Depends(_bearer),
 ) -> dict[str, Any]:
     if cred is None:
@@ -26,19 +25,29 @@ def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Bearer token required"
         )
     try:
-        claims = jwt.decode(
-            cred.credentials,
-            settings.supabase_jwt_secret,
-            audience="authenticated",
-            algorithms=["HS256"],
-        )
-    except jwt.PyJWTError as exc:
+        async with httpx.AsyncClient(timeout=10.0) as http:
+            resp = await http.get(
+                f"{settings.supabase_url.rstrip('/')}/auth/v1/user",
+                headers={
+                    "apikey": settings.supabase_anon_key,
+                    "Authorization": f"Bearer {cred.credentials}",
+                },
+            )
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Token verification failed",
+        ) from exc
+
+    if resp.status_code != 200:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
-        ) from exc
-    user_id = cast(str, claims.get("sub"))
+        )
+
+    data = resp.json()
+    user_id: str = data.get("id", "")
     if not user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Token missing subject"
         )
-    return {"user_id": user_id, "email": claims.get("email"), "jwt": cred.credentials}
+    return {"user_id": user_id, "email": data.get("email"), "jwt": cred.credentials}
