@@ -25,6 +25,7 @@ import { Connect } from './pages/Connect'
 import { McpAuth } from './pages/McpAuth'
 
 const router = createBrowserRouter([
+  { path: '/mcp-auth', element: <McpAuth /> },
   {
     element: <Layout />,
     children: [
@@ -36,7 +37,6 @@ const router = createBrowserRouter([
       { path: '/search', element: <Search /> },
       { path: '/settings', element: <Settings /> },
       { path: '/connect', element: <Connect /> },
-      { path: '/mcp-auth', element: <McpAuth /> },
     ],
   },
 ])
