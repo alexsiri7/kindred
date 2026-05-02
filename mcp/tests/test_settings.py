@@ -12,11 +12,7 @@ def test_mcp_allowed_hosts_accepts_csv(monkeypatch: pytest.MonkeyPatch) -> None:
     import settings as settings_module
 
     importlib.reload(settings_module)
-    parsed = [
-        h.strip()
-        for h in settings_module.settings.mcp_allowed_hosts.split(",")
-        if h.strip()
-    ]
+    parsed = [h.strip() for h in settings_module.settings.mcp_allowed_hosts.split(",") if h.strip()]
     assert parsed == ["a.example.com", "b.example.com"]
 
 
