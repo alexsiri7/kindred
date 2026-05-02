@@ -24,11 +24,11 @@ if settings.sentry_dsn:
         environment="production",
     )
 
-_transport_security: TransportSecuritySettings | None
-if settings.mcp_allowed_hosts:
+_allowed_hosts = [h.strip() for h in settings.mcp_allowed_hosts.split(",") if h.strip()]
+if _allowed_hosts:
     _transport_security = TransportSecuritySettings(
         enable_dns_rebinding_protection=True,
-        allowed_hosts=settings.mcp_allowed_hosts,
+        allowed_hosts=_allowed_hosts,
     )
 else:
     _transport_security = TransportSecuritySettings(enable_dns_rebinding_protection=False)

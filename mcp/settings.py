@@ -14,7 +14,7 @@ class Settings(BaseSettings):
 
     mcp_host: str = "0.0.0.0"
     mcp_port: int = 8000
-    mcp_allowed_hosts: list[str] = []
+    mcp_allowed_hosts: str = ""
 
 
 settings = Settings()
