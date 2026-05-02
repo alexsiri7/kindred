@@ -24,20 +24,26 @@ if settings.sentry_dsn:
         environment="production",
     )
 
-_allowed_hosts = [h.strip() for h in settings.mcp_allowed_hosts.split(",") if h.strip()]
-if _allowed_hosts:
-    _transport_security = TransportSecuritySettings(
-        enable_dns_rebinding_protection=True,
-        allowed_hosts=_allowed_hosts,
-    )
-else:
-    _transport_security = TransportSecuritySettings(enable_dns_rebinding_protection=False)
+
+def _parse_allowed_hosts(raw: str) -> list[str]:
+    return [h.strip() for h in raw.split(",") if h.strip()]
+
+
+def _build_transport_security(raw_hosts: str) -> TransportSecuritySettings:
+    hosts = _parse_allowed_hosts(raw_hosts)
+    if hosts:
+        return TransportSecuritySettings(
+            enable_dns_rebinding_protection=True,
+            allowed_hosts=hosts,
+        )
+    return TransportSecuritySettings(enable_dns_rebinding_protection=False)
+
 
 mcp: FastMCP = FastMCP(
     "Kindred",
     stateless_http=True,
     json_response=True,
-    transport_security=_transport_security,
+    transport_security=_build_transport_security(settings.mcp_allowed_hosts),
 )
 
 # ---------------------------------------------------------------------------
