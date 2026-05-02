@@ -264,9 +264,10 @@ def register_routes(mcp_obj: FastMCP) -> None:
             },
         )
         logger.info(
-            "MCP OAuth: authorize → web-app relay for client %s (flow %s…)",
+            "MCP OAuth: authorize → web-app relay for client %s (flow %s… stored_keys=%r)",
             client_id,
-            flow_key[:8],
+            flow_key[:12],
+            [k[:8] for k in oauth_sessions],
         )
         return RedirectResponse(
             url=f"{WEB_APP_ORIGIN}/mcp-auth?flow={flow_key}",
@@ -292,6 +293,13 @@ def register_routes(mcp_obj: FastMCP) -> None:
 
         flow_id = str(body.get("flow_id", ""))
         access_token = str(body.get("access_token", ""))
+
+        logger.info(
+            "MCP OAuth: code-from-session received flow_id=%r len=%d known_keys=%r",
+            flow_id[:12] if flow_id else "",
+            len(flow_id),
+            [k[:8] for k in oauth_sessions],
+        )
 
         if not flow_id or not access_token:
             return JSONResponse(
