@@ -8,6 +8,7 @@ from typing import Any
 
 import sentry_sdk
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 
 from auth import current_user_id, resolve_user_id
 from settings import settings
@@ -23,10 +24,20 @@ if settings.sentry_dsn:
         environment="production",
     )
 
+_transport_security: TransportSecuritySettings | None
+if settings.mcp_allowed_hosts:
+    _transport_security = TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=settings.mcp_allowed_hosts,
+    )
+else:
+    _transport_security = TransportSecuritySettings(enable_dns_rebinding_protection=False)
+
 mcp: FastMCP = FastMCP(
     "Kindred",
     stateless_http=True,
     json_response=True,
+    transport_security=_transport_security,
 )
 
 # ---------------------------------------------------------------------------
