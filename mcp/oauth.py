@@ -121,11 +121,9 @@ async def _verify_supabase_token(access_token: str) -> dict[str, Any] | None:
     """Verify a Supabase access token via /auth/v1/user.
 
     Returns the user payload dict on success, or ``None`` if the network call
-    fails or Supabase rejects the token. Extracted from the route handler so
-    tests can stub it without monkey-patching ``httpx`` globally.
-
-    Uses the Supabase REST API rather than local JWT decode so verification
-    works regardless of the project's signing algorithm (HS256 vs RS256).
+    fails or Supabase rejects the token. Uses the Supabase REST API rather than
+    local JWT decode so verification works regardless of the project's signing
+    algorithm (HS256 vs RS256).
     """
     try:
         async with httpx.AsyncClient(timeout=10.0) as http:

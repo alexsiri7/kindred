@@ -1,10 +1,8 @@
 """Direct unit tests for ``oauth._verify_supabase_token``.
 
-The other suites stub the helper to keep the route tests hermetic; these tests
-exercise the helper itself by intercepting the ``httpx`` call so each branch
-(transport error, non-200, non-dict payload, non-JSON body, success) has direct
-coverage. Without this, the ``isinstance`` narrowing and the new ``ValueError``
-catch would have no test guarding against future regression.
+The route-level suites stub this helper so they stay hermetic; these tests
+exercise the helper itself by intercepting the ``httpx`` call, covering each
+branch: transport error, non-200, non-JSON body, non-dict payload, and success.
 """
 
 from __future__ import annotations

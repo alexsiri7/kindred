@@ -10,6 +10,7 @@ import httpx
 import jwt
 import pytest
 
+import oauth as oauth_module
 import oauth_state
 import settings as settings_module
 from main import app
@@ -52,7 +53,6 @@ def _stub_supabase_verify(monkeypatch: pytest.MonkeyPatch) -> None:
     Tokens signed with a different secret raise ``PyJWTError`` and the stub
     returns ``None``, preserving the bad-token rejection path.
     """
-    import oauth as oauth_module
 
     async def _fake_verify(access_token: str) -> dict | None:
         try:
