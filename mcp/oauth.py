@@ -123,6 +123,9 @@ async def _verify_supabase_token(access_token: str) -> dict[str, Any] | None:
     Returns the user payload dict on success, or ``None`` if the network call
     fails or Supabase rejects the token. Extracted from the route handler so
     tests can stub it without monkey-patching ``httpx`` globally.
+
+    Uses the Supabase REST API rather than local JWT decode so verification
+    works regardless of the project's signing algorithm (HS256 vs RS256).
     """
     try:
         async with httpx.AsyncClient(timeout=10.0) as http:
@@ -133,16 +136,25 @@ async def _verify_supabase_token(access_token: str) -> dict[str, Any] | None:
                     "Authorization": f"Bearer {access_token}",
                 },
             )
+        if resp.status_code != 200:
+            logger.warning(
+                "MCP OAuth: Supabase /auth/v1/user returned %s", resp.status_code
+            )
+            return None
+        payload = resp.json()
     except httpx.HTTPError as exc:
         logger.warning("MCP OAuth: Supabase user lookup failed: %s", exc)
         return None
-    if resp.status_code != 200:
+    except ValueError as exc:
+        logger.warning("MCP OAuth: Supabase /auth/v1/user returned non-JSON body: %s", exc)
+        return None
+    if not isinstance(payload, dict):
         logger.warning(
-            "MCP OAuth: Supabase /auth/v1/user returned %s", resp.status_code
+            "MCP OAuth: Supabase /auth/v1/user returned non-dict payload (type=%s)",
+            type(payload).__name__,
         )
         return None
-    payload = resp.json()
-    return payload if isinstance(payload, dict) else None
+    return payload
 
 
 def register_routes(mcp_obj: FastMCP) -> None:
@@ -349,7 +361,7 @@ def register_routes(mcp_obj: FastMCP) -> None:
             )
 
         user_data = await _verify_supabase_token(access_token)
-        if not user_data:
+        if user_data is None:
             return JSONResponse(
                 {"error": "server_error", "error_description": "Token verification failed"},
                 status_code=400,

@@ -47,18 +47,24 @@ def _clear_state() -> None:
 def _stub_supabase_verify(monkeypatch: pytest.MonkeyPatch) -> None:
     """Stub the outbound Supabase /auth/v1/user call.
 
-    Returns a user payload for the canonical token minted by
-    ``_make_supabase_jwt()`` (default secret), and ``None`` for any other token
-    so the bad-token rejection path is still exercised.
+    Accepts any HS256 JWT signed with ``SUPABASE_JWT_SECRET`` (mirrors what
+    real Supabase does — verifies the signature, not the exact byte string).
+    Tokens signed with a different secret raise ``PyJWTError`` and the stub
+    returns ``None``, preserving the bad-token rejection path.
     """
     import oauth as oauth_module
 
-    valid_token = _make_supabase_jwt()
-
     async def _fake_verify(access_token: str) -> dict | None:
-        if access_token == valid_token:
-            return {"id": USER_ID, "email": "u@example.com"}
-        return None
+        try:
+            jwt.decode(
+                access_token,
+                SUPABASE_JWT_SECRET,
+                algorithms=["HS256"],
+                options={"verify_aud": False},
+            )
+        except jwt.PyJWTError:
+            return None
+        return {"id": USER_ID, "email": "u@example.com"}
 
     monkeypatch.setattr(oauth_module, "_verify_supabase_token", _fake_verify)
 
