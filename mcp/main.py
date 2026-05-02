@@ -10,7 +10,7 @@ import sentry_sdk
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 
-from auth import current_user_id, resolve_user_id
+from auth import current_user_id, resolve_user_id, resolve_user_id_from_jwt
 from settings import settings
 from tools import entries as entry_tools
 from tools import patterns as pattern_tools
@@ -39,6 +39,14 @@ mcp: FastMCP = FastMCP(
     json_response=True,
     transport_security=_transport_security,
 )
+
+# ---------------------------------------------------------------------------
+# OAuth 2.1 + discovery routes (registered as @mcp.custom_route())
+# ---------------------------------------------------------------------------
+from oauth import register_routes as _register_oauth_routes  # noqa: E402
+
+_register_oauth_routes(mcp)
+
 
 # ---------------------------------------------------------------------------
 # Tool registration
@@ -81,12 +89,20 @@ Send = Callable[[MutableMapping[str, Any]], Awaitable[None]]
 ASGIApp = Callable[[Scope, Receive, Send], Awaitable[None]]
 
 
+_PUBLIC_PATH_PREFIXES = ("/.well-known/", "/oauth/")
+
+
+def _is_public_path(path: str) -> bool:
+    return any(path.startswith(p) for p in _PUBLIC_PATH_PREFIXES)
+
+
 def with_user_context(app: ASGIApp) -> ASGIApp:
     async def wrapper(scope: Scope, receive: Receive, send: Send) -> None:
         if scope.get("type") != "http":
             await app(scope, receive, send)
             return
-        if scope.get("path") == "/healthz":
+        path = scope.get("path", "")
+        if path == "/healthz":
             await send(
                 {
                     "type": "http.response.start",
@@ -96,21 +112,52 @@ def with_user_context(app: ASGIApp) -> ASGIApp:
             )
             await send({"type": "http.response.body", "body": b'{"ok":true}'})
             return
+        if _is_public_path(path):
+            # OAuth + discovery endpoints are intentionally unauthenticated;
+            # let FastMCP's custom_route handlers serve them.
+            await app(scope, receive, send)
+            return
         headers = {k.decode().lower(): v.decode() for k, v in scope.get("headers", [])}
         auth = headers.get("authorization", "")
         token: str | None = None
         if auth.lower().startswith("bearer "):
             token = auth.split(" ", 1)[1].strip()
+
+        user_id: str | None = None
         if token:
-            user_id = await resolve_user_id(token)
-            if user_id is not None:
-                ctx_token = current_user_id.set(user_id)
-                try:
-                    await app(scope, receive, send)
-                finally:
-                    current_user_id.reset(ctx_token)
-                return
-        await app(scope, receive, send)
+            # JWTs always start with "eyJ" (base64 of '{"...'); try JWT first,
+            # then fall through to the connector-token DB lookup.
+            if token.startswith("eyJ"):
+                user_id = resolve_user_id_from_jwt(token)
+            if user_id is None:
+                user_id = await resolve_user_id(token)
+
+        if user_id is not None:
+            ctx_token = current_user_id.set(user_id)
+            try:
+                await app(scope, receive, send)
+            finally:
+                current_user_id.reset(ctx_token)
+            return
+
+        # Unauthenticated request to a protected path → 401 with the
+        # RFC 9728 resource_metadata pointer so MCP clients can discover
+        # the OAuth flow. Public OAuth/discovery routes are served by
+        # FastMCP's custom_route registration before middleware reaches them.
+        base = settings.mcp_base_url.rstrip("/") if settings.mcp_base_url else ""
+        resource_metadata_url = f"{base}/.well-known/oauth-protected-resource"
+        www_auth = f'Bearer realm="kindred", resource_metadata="{resource_metadata_url}"'
+        await send(
+            {
+                "type": "http.response.start",
+                "status": 401,
+                "headers": [
+                    [b"content-type", b"application/json"],
+                    [b"www-authenticate", www_auth.encode("ascii")],
+                ],
+            }
+        )
+        await send({"type": "http.response.body", "body": b'{"error":"unauthorized"}'})
 
     return wrapper
 

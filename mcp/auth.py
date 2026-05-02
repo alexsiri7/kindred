@@ -18,9 +18,11 @@ from __future__ import annotations
 import asyncio
 from contextvars import ContextVar
 
+import jwt
 from mcp.server.auth.provider import AccessToken, TokenVerifier
 
 import db
+from settings import settings
 
 current_user_id: ContextVar[str] = ContextVar("current_user_id")
 
@@ -47,3 +49,19 @@ async def resolve_user_id(token: str) -> str | None:
     if row is None:
         return None
     return str(row["user_id"])
+
+
+def resolve_user_id_from_jwt(token: str) -> str | None:
+    """Decode an HS256 JWT signed with ``settings.secret_key``.
+
+    Returns the ``sub`` claim (user_id) or ``None`` if verification fails for
+    any reason (missing secret, expired token, bad signature, malformed payload).
+    """
+    if not settings.secret_key:
+        return None
+    try:
+        payload = jwt.decode(token, settings.secret_key, algorithms=["HS256"])
+    except jwt.PyJWTError:
+        return None
+    sub = payload.get("sub")
+    return str(sub) if sub else None
