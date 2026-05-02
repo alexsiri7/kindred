@@ -6,8 +6,8 @@ Implements the MCP Authorization spec
   - GET  /.well-known/oauth-protected-resource     (RFC 9728)
   - GET  /.well-known/oauth-authorization-server   (RFC 8414)
   - POST /oauth/register                            (RFC 7591)
-  - GET  /oauth/authorize  → 302 to Supabase Google OAuth (PKCE)
-  - GET  /oauth/callback   ← receives Supabase code, exchanges for user info
+  - GET  /oauth/authorize  → 302 to web app /mcp-auth relay page
+  - POST /oauth/code-from-session ← web app posts Supabase token after OAuth
   - POST /oauth/token      → issues HS256 JWT (and refresh token)
 
 Routes are registered as ``@mcp.custom_route()`` on the FastMCP instance via
@@ -26,7 +26,6 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import urlencode
 
-import httpx
 import jwt
 from mcp.server.fastmcp import FastMCP
 from starlette.exceptions import HTTPException
@@ -50,29 +49,20 @@ SESSION_TTL_SECONDS = 60 * 10  # 10 minutes
 JWT_EXPIRY_SECONDS = 60 * 60 * 24 * 7  # 7 days
 REFRESH_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 30  # 30 days
 
+WEB_APP_ORIGIN = "https://kindred.interstellarai.net"
+
+_CORS_HEADERS = {
+    "Access-Control-Allow-Origin": WEB_APP_ORIGIN,
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+}
+
 
 def _base_url() -> str:
     """Public base URL of the MCP server (no trailing slash). Raises 501 if unset."""
     if not settings.mcp_base_url:
         raise HTTPException(status_code=501, detail="MCP_BASE_URL not configured")
     return settings.mcp_base_url.rstrip("/")
-
-
-def _supabase_authorize_url(server_state: str, code_challenge: str) -> str:
-    """Build the Supabase Auth URL that starts the Google OAuth + PKCE flow."""
-    if not settings.supabase_url:
-        raise HTTPException(status_code=501, detail="SUPABASE_URL not configured")
-    base = settings.supabase_url.rstrip("/")
-    redirect_to = f"{_base_url()}/oauth/callback"
-    params = {
-        "provider": "google",
-        "redirect_to": redirect_to,
-        "flow_type": "pkce",
-        "code_challenge": code_challenge,
-        "code_challenge_method": "S256",
-        "state": server_state,
-    }
-    return f"{base}/auth/v1/authorize?{urlencode(params)}"
 
 
 def _create_jwt(user_id: str, email: str | None) -> str:
@@ -216,14 +206,12 @@ def register_routes(mcp_obj: FastMCP) -> None:
         )
 
     # -----------------------------------------------------------------------
-    # Authorization endpoint
+    # Authorization endpoint — redirects to web-app OAuth relay
     # -----------------------------------------------------------------------
     @mcp_obj.custom_route("/oauth/authorize", methods=["GET"])  # type: ignore[untyped-decorator]
     async def oauth_authorize(request: Request) -> Response:
         if not settings.secret_key:
             raise HTTPException(status_code=501, detail="SECRET_KEY not configured")
-        if not settings.supabase_url:
-            raise HTTPException(status_code=501, detail="SUPABASE_URL not configured")
 
         qp = request.query_params
         client_id = qp.get("client_id", "")
@@ -260,13 +248,10 @@ def register_routes(mcp_obj: FastMCP) -> None:
                 status_code=400, detail="redirect_uri not registered for this client"
             )
 
-        server_state = secrets.token_urlsafe(32)
-        supabase_code_verifier = secrets.token_urlsafe(64)
-        supabase_code_challenge = _pkce_s256(supabase_code_verifier)
-
+        flow_key = secrets.token_urlsafe(32)
         cleanup_and_store(
             oauth_sessions,
-            server_state,
+            flow_key,
             {
                 "client_state": client_state,
                 "redirect_uri": redirect_uri,
@@ -274,76 +259,54 @@ def register_routes(mcp_obj: FastMCP) -> None:
                 "code_challenge_method": code_challenge_method,
                 "client_id": client_id,
                 "scope": scope,
-                "supabase_code_verifier": supabase_code_verifier,
                 "expires_at": datetime.now(UTC)
                 + timedelta(seconds=SESSION_TTL_SECONDS),
             },
         )
         logger.info(
-            "MCP OAuth: authorize redirect for client %s → Supabase",
+            "MCP OAuth: authorize → web-app relay for client %s (flow %s…)",
             client_id,
+            flow_key[:8],
         )
         return RedirectResponse(
-            url=_supabase_authorize_url(server_state, supabase_code_challenge),
+            url=f"{WEB_APP_ORIGIN}/mcp-auth?flow={flow_key}",
             status_code=302,
         )
 
     # -----------------------------------------------------------------------
-    # OAuth callback (Supabase → kindred)
+    # Code-from-session — called by the web-app relay after Supabase OAuth
     # -----------------------------------------------------------------------
-    @mcp_obj.custom_route("/oauth/callback", methods=["GET"])  # type: ignore[untyped-decorator]
-    async def oauth_callback(request: Request) -> Response:
-        qp = request.query_params
-        supabase_code = qp.get("code", "")
-        server_state = qp.get("state", "")
+    @mcp_obj.custom_route("/oauth/code-from-session", methods=["POST", "OPTIONS"])  # type: ignore[untyped-decorator]
+    async def oauth_code_from_session(request: Request) -> Response:
+        if request.method == "OPTIONS":
+            return Response(headers=_CORS_HEADERS)
 
-        session = cleanup_and_pop(oauth_sessions, server_state)
-        if not session:
-            raise HTTPException(
-                status_code=400, detail="Invalid or expired session state"
-            )
-
-        client_redirect_uri = session["redirect_uri"]
-        client_state = session["client_state"]
-
-        def _redirect(params: dict[str, str]) -> RedirectResponse:
-            return RedirectResponse(
-                url=f"{client_redirect_uri}?{urlencode(params)}",
-                status_code=302,
-            )
-
-        if not supabase_code:
-            return _redirect({"error": "invalid_request", "state": client_state})
-
-        # Exchange Supabase auth code for an access token via PKCE.
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                resp = await client.post(
-                    f"{settings.supabase_url.rstrip('/')}/auth/v1/token",
-                    params={"grant_type": "pkce"},
-                    json={
-                        "auth_code": supabase_code,
-                        "code_verifier": session["supabase_code_verifier"],
-                    },
-                    headers={
-                        "apikey": settings.supabase_anon_key,
-                        "Content-Type": "application/json",
-                    },
-                )
-            if resp.status_code != 200:
-                logger.warning(
-                    "MCP OAuth: Supabase token exchange failed: status=%s",
-                    resp.status_code,
-                )
-                return _redirect({"error": "server_error", "state": client_state})
-            token_payload = resp.json()
-        except (httpx.HTTPError, ValueError) as exc:
-            logger.warning("MCP OAuth: Supabase token exchange error: %s", exc)
-            return _redirect({"error": "server_error", "state": client_state})
+            body = await request.json()
+        except Exception:
+            return JSONResponse(
+                {"error": "invalid_request", "error_description": "JSON body required"},
+                status_code=400,
+                headers=_CORS_HEADERS,
+            )
 
-        access_token = token_payload.get("access_token", "")
-        if not access_token:
-            return _redirect({"error": "server_error", "state": client_state})
+        flow_id = str(body.get("flow_id", ""))
+        access_token = str(body.get("access_token", ""))
+
+        if not flow_id or not access_token:
+            return JSONResponse(
+                {"error": "invalid_request", "error_description": "flow_id and access_token required"},
+                status_code=400,
+                headers=_CORS_HEADERS,
+            )
+
+        session = cleanup_and_pop(oauth_sessions, flow_id)
+        if not session:
+            return JSONResponse(
+                {"error": "invalid_request", "error_description": "Invalid or expired flow_id"},
+                status_code=400,
+                headers=_CORS_HEADERS,
+            )
 
         try:
             claims = jwt.decode(
@@ -354,14 +317,21 @@ def register_routes(mcp_obj: FastMCP) -> None:
             )
         except jwt.PyJWTError as exc:
             logger.warning("MCP OAuth: Supabase JWT decode failed: %s", exc)
-            return _redirect({"error": "server_error", "state": client_state})
+            return JSONResponse(
+                {"error": "server_error", "error_description": "Token verification failed"},
+                status_code=400,
+                headers=_CORS_HEADERS,
+            )
 
         user_id = claims.get("sub")
         email = claims.get("email")
         if not user_id:
-            return _redirect({"error": "server_error", "state": client_state})
+            return JSONResponse(
+                {"error": "server_error", "error_description": "No user ID in token"},
+                status_code=400,
+                headers=_CORS_HEADERS,
+            )
 
-        # Mint our own auth code; bind to the MCP client's PKCE challenge.
         kindred_auth_code = secrets.token_urlsafe(32)
         cleanup_and_store(
             auth_codes,
@@ -371,18 +341,22 @@ def register_routes(mcp_obj: FastMCP) -> None:
                 "email": email,
                 "code_challenge": session["code_challenge"],
                 "code_challenge_method": session["code_challenge_method"],
-                "redirect_uri": client_redirect_uri,
+                "redirect_uri": session["redirect_uri"],
                 "scope": session.get("scope", "mcp"),
                 "client_id": session["client_id"],
                 "expires_at": datetime.now(UTC)
                 + timedelta(seconds=AUTH_CODE_TTL_SECONDS),
             },
         )
+
+        params = {"code": kindred_auth_code, "state": session["client_state"]}
+        redirect_url = f"{session['redirect_uri']}?{urlencode(params)}"
         logger.info(
-            "MCP OAuth: callback complete; redirecting to client %s",
+            "MCP OAuth: code-from-session complete for client %s → %s",
             session["client_id"],
+            session["redirect_uri"],
         )
-        return _redirect({"code": kindred_auth_code, "state": client_state})
+        return JSONResponse({"redirect_url": redirect_url}, headers=_CORS_HEADERS)
 
     # -----------------------------------------------------------------------
     # Token endpoint
