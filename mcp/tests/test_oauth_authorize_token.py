@@ -70,7 +70,7 @@ async def _register(client: httpx.AsyncClient, redirect: str = "https://app/cb")
 # ---------------------------------------------------------------------------
 
 
-async def test_authorize_redirects_to_supabase(client: httpx.AsyncClient) -> None:
+async def test_authorize_redirects_to_web_app_relay(client: httpx.AsyncClient) -> None:
     cid = await _register(client)
     _verifier, challenge = _pkce_pair()
     res = await client.get(
@@ -88,16 +88,11 @@ async def test_authorize_redirects_to_supabase(client: httpx.AsyncClient) -> Non
     )
     assert res.status_code == 302
     loc = res.headers["location"]
-    assert loc.startswith(f"{SUPABASE_URL}/auth/v1/authorize?")
-    qs = parse_qs(urlparse(loc).query)
-    assert qs["provider"] == ["google"]
-    assert qs["code_challenge_method"] == ["S256"]
-    assert qs["redirect_to"] == [f"{BASE}/oauth/callback"]
-    assert "state" in qs
-    # Server state must be stored in the sessions dict
-    server_state = qs["state"][0]
-    assert server_state in oauth_state.oauth_sessions
-    assert oauth_state.oauth_sessions[server_state]["client_state"] == "client-state-123"
+    assert loc.startswith("https://kindred.interstellarai.net/mcp-auth?flow=")
+    flow_key = parse_qs(urlparse(loc).query)["flow"][0]
+    assert flow_key in oauth_state.oauth_sessions
+    assert oauth_state.oauth_sessions[flow_key]["client_state"] == "client-state-123"
+    assert oauth_state.oauth_sessions[flow_key]["redirect_uri"] == "https://app/cb"
 
 
 async def test_authorize_rejects_unknown_redirect_uri(client: httpx.AsyncClient) -> None:

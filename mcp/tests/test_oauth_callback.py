@@ -1,23 +1,20 @@
-"""Callback endpoint tests — Supabase token exchange + JWT decode."""
+"""/oauth/code-from-session endpoint tests."""
 
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
-from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 import httpx
 import jwt
 import pytest
 
-import oauth as oauth_module
 import oauth_state
 import settings as settings_module
 from main import app
 
 SUPABASE_JWT_SECRET = "supabase-jwt-secret-needs-to-be-at-least-32-bytes"
-SUPABASE_URL = "https://supabase.test"
 USER_ID = "11111111-2222-3333-4444-555555555555"
 
 
@@ -26,8 +23,6 @@ def _settings(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         settings_module.settings, "mcp_base_url", "https://test.example.com"
     )
-    monkeypatch.setattr(settings_module.settings, "supabase_url", SUPABASE_URL)
-    monkeypatch.setattr(settings_module.settings, "supabase_anon_key", "anon-key")
     monkeypatch.setattr(
         settings_module.settings, "supabase_jwt_secret", SUPABASE_JWT_SECRET
     )
@@ -52,45 +47,19 @@ async def client() -> AsyncIterator[httpx.AsyncClient]:
         yield c
 
 
-def _seed_session(server_state: str, redirect_uri: str = "https://app/cb") -> None:
-    oauth_state.oauth_sessions[server_state] = {
+def _seed_session(flow_id: str, redirect_uri: str = "https://app/cb") -> None:
+    oauth_state.oauth_sessions[flow_id] = {
         "client_state": "client-st",
         "redirect_uri": redirect_uri,
         "code_challenge": "ch",
         "code_challenge_method": "S256",
         "client_id": "test-client",
         "scope": "mcp",
-        "supabase_code_verifier": "verifier-xyz",
         "expires_at": datetime.now(UTC) + timedelta(minutes=5),
     }
 
 
-class _StubResponse:
-    def __init__(self, status_code: int, payload: dict[str, Any]) -> None:
-        self.status_code = status_code
-        self._payload = payload
-
-    def json(self) -> dict[str, Any]:
-        return self._payload
-
-
-class _FakeAsyncClient:
-    """Minimal stand-in for ``httpx.AsyncClient`` used inside ``oauth.py``."""
-
-    response: _StubResponse = _StubResponse(200, {})
-
-    def __init__(self, *_args: Any, **_kw: Any) -> None: ...
-
-    async def __aenter__(self) -> _FakeAsyncClient:
-        return self
-
-    async def __aexit__(self, *_exc: Any) -> None: ...
-
-    async def post(self, *_args: Any, **_kw: Any) -> _StubResponse:
-        return type(self).response
-
-
-def _make_supabase_jwt() -> str:
+def _make_supabase_jwt(secret: str = SUPABASE_JWT_SECRET) -> str:
     return jwt.encode(
         {
             "sub": USER_ID,
@@ -98,80 +67,81 @@ def _make_supabase_jwt() -> str:
             "aud": "authenticated",
             "exp": int((datetime.now(UTC) + timedelta(hours=1)).timestamp()),
         },
-        SUPABASE_JWT_SECRET,
+        secret,
         algorithm="HS256",
     )
 
 
-async def test_callback_success_redirects_with_kindred_code(
-    monkeypatch: pytest.MonkeyPatch, client: httpx.AsyncClient
-) -> None:
-    _seed_session("server-state-1", "https://app/cb")
-    supabase_jwt = _make_supabase_jwt()
-    _FakeAsyncClient.response = _StubResponse(200, {"access_token": supabase_jwt})
-    monkeypatch.setattr(oauth_module.httpx, "AsyncClient", _FakeAsyncClient)
-
-    res = await client.get(
-        "/oauth/callback",
-        params={"code": "supabase-code", "state": "server-state-1"},
-        follow_redirects=False,
+async def test_code_from_session_options_preflight(client: httpx.AsyncClient) -> None:
+    res = await client.options(
+        "/oauth/code-from-session",
+        headers={"Origin": "https://kindred.interstellarai.net"},
     )
-    assert res.status_code == 302
-    parsed = urlparse(res.headers["location"])
+    assert res.status_code == 200
+    assert res.headers["access-control-allow-origin"] == "https://kindred.interstellarai.net"
+    assert "POST" in res.headers["access-control-allow-methods"]
+
+
+async def test_code_from_session_success(client: httpx.AsyncClient) -> None:
+    _seed_session("flow-1", "https://app/cb")
+    token = _make_supabase_jwt()
+
+    res = await client.post(
+        "/oauth/code-from-session",
+        json={"flow_id": "flow-1", "access_token": token},
+    )
+    assert res.status_code == 200
+    assert res.headers["access-control-allow-origin"] == "https://kindred.interstellarai.net"
+
+    body = res.json()
+    assert "redirect_url" in body
+    parsed = urlparse(body["redirect_url"])
     assert f"{parsed.scheme}://{parsed.netloc}{parsed.path}" == "https://app/cb"
     qs = parse_qs(parsed.query)
     assert "code" in qs
     assert qs["state"] == ["client-st"]
-    # an auth code entry was minted with the right user_id
+
     kindred_code = qs["code"][0]
     assert kindred_code in oauth_state.auth_codes
     assert oauth_state.auth_codes[kindred_code]["user_id"] == USER_ID
 
 
-async def test_callback_supabase_400_redirects_with_error(
-    monkeypatch: pytest.MonkeyPatch, client: httpx.AsyncClient
-) -> None:
-    _seed_session("server-state-2")
-    _FakeAsyncClient.response = _StubResponse(400, {"error": "invalid_grant"})
-    monkeypatch.setattr(oauth_module.httpx, "AsyncClient", _FakeAsyncClient)
-
-    res = await client.get(
-        "/oauth/callback",
-        params={"code": "x", "state": "server-state-2"},
-        follow_redirects=False,
+async def test_code_from_session_invalid_flow_id(client: httpx.AsyncClient) -> None:
+    token = _make_supabase_jwt()
+    res = await client.post(
+        "/oauth/code-from-session",
+        json={"flow_id": "does-not-exist", "access_token": token},
     )
-    assert res.status_code == 302
-    qs = parse_qs(urlparse(res.headers["location"]).query)
-    assert qs["error"] == ["server_error"]
+    assert res.status_code == 400
+    assert res.json()["error"] == "invalid_request"
 
 
-async def test_callback_unknown_state_returns_400(client: httpx.AsyncClient) -> None:
-    res = await client.get(
-        "/oauth/callback",
-        params={"code": "x", "state": "never-seeded"},
-        follow_redirects=False,
+async def test_code_from_session_bad_jwt(client: httpx.AsyncClient) -> None:
+    _seed_session("flow-2")
+    bad_token = _make_supabase_jwt(secret="different-secret-which-is-also-32-bytes-long")
+    res = await client.post(
+        "/oauth/code-from-session",
+        json={"flow_id": "flow-2", "access_token": bad_token},
     )
+    assert res.status_code == 400
+    assert res.json()["error"] == "server_error"
+
+
+async def test_code_from_session_missing_fields(client: httpx.AsyncClient) -> None:
+    res = await client.post("/oauth/code-from-session", json={"flow_id": "x"})
     assert res.status_code == 400
 
 
-async def test_callback_jwt_decode_failure_redirects_with_error(
-    monkeypatch: pytest.MonkeyPatch, client: httpx.AsyncClient
-) -> None:
-    _seed_session("server-state-3")
-    # access_token signed with a *different* secret → decode will fail
-    bad_jwt = jwt.encode(
-        {"sub": USER_ID, "aud": "authenticated"},
-        "different-secret-which-is-also-32-bytes-long",
-        algorithm="HS256",
+async def test_code_from_session_flow_id_is_single_use(client: httpx.AsyncClient) -> None:
+    _seed_session("flow-3")
+    token = _make_supabase_jwt()
+    r1 = await client.post(
+        "/oauth/code-from-session",
+        json={"flow_id": "flow-3", "access_token": token},
     )
-    _FakeAsyncClient.response = _StubResponse(200, {"access_token": bad_jwt})
-    monkeypatch.setattr(oauth_module.httpx, "AsyncClient", _FakeAsyncClient)
-
-    res = await client.get(
-        "/oauth/callback",
-        params={"code": "x", "state": "server-state-3"},
-        follow_redirects=False,
+    r2 = await client.post(
+        "/oauth/code-from-session",
+        json={"flow_id": "flow-3", "access_token": token},
     )
-    assert res.status_code == 302
-    qs = parse_qs(urlparse(res.headers["location"]).query)
-    assert qs["error"] == ["server_error"]
+    assert r1.status_code == 200
+    assert r2.status_code == 400
