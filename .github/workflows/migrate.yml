@@ -20,8 +20,8 @@ jobs:
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: |
           missing=()
-          [ -z "$SUPABASE_ACCESS_TOKEN" ] && missing+=("SUPABASE_ACCESS_TOKEN")
-          [ -z "$SUPABASE_DB_PASSWORD" ] && missing+=("SUPABASE_DB_PASSWORD")
+          if [ -z "${SUPABASE_ACCESS_TOKEN//[[:space:]]/}" ]; then missing+=("SUPABASE_ACCESS_TOKEN"); fi
+          if [ -z "${SUPABASE_DB_PASSWORD//[[:space:]]/}" ]; then missing+=("SUPABASE_DB_PASSWORD"); fi
           if [ ${#missing[@]} -gt 0 ]; then
             echo "::error::Required secrets missing: ${missing[*]}. Add them in Settings → Secrets and variables → Actions (see README.md)."
             exit 1
