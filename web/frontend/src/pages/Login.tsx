@@ -2,6 +2,7 @@ import { Navigate } from 'react-router'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../store/auth'
 import { KindredMark } from '../components/Brand'
+import { Button } from '../components/Button'
 
 export function Login() {
   const session = useAuth((s) => s.session)
@@ -79,14 +80,14 @@ export function Login() {
           A reflective journaling companion.
         </p>
 
-        <button
-          type="button"
-          className="btn btn-primary btn-lg"
+        <Button
+          variant="primary"
+          size="lg"
           onClick={signIn}
           style={{ width: '100%', justifyContent: 'center' }}
         >
           Sign in with Google
-        </button>
+        </Button>
       </div>
     </div>
   )
