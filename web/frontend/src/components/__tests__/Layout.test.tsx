@@ -1,12 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { MemoryRouter } from 'react-router'
+import { MemoryRouter, Routes, Route } from 'react-router'
+
+const authState: { session: unknown; initialized: boolean } = {
+  session: { user: { email: 'tester@example.com' } },
+  initialized: true,
+}
 
 vi.mock('../../store/auth', () => ({
-  useAuth: (selector: (s: { session: unknown }) => unknown) =>
-    selector({
-      session: { user: { email: 'tester@example.com' } },
-    }),
+  useAuth: (
+    selector: (s: { session: unknown; initialized: boolean }) => unknown,
+  ) => selector(authState),
 }))
 
 vi.mock('../../lib/supabase', () => ({
@@ -119,5 +123,42 @@ describe('Layout — Report an issue link', () => {
     expect(body).not.toContain('q=secret')
     expect(body).not.toContain('#frag')
     expect(body).toContain('- **Page:** /app/search')
+  })
+})
+
+describe('Layout — auth gate', () => {
+  function renderGate() {
+    return render(
+      <MemoryRouter initialEntries={['/app']}>
+        <Routes>
+          <Route path="/app" element={<Layout />} />
+          <Route path="/login" element={<div>LOGIN_ROUTE</div>} />
+        </Routes>
+      </MemoryRouter>,
+    )
+  }
+
+  it('renders nothing while auth is still initializing (does not <Navigate>)', () => {
+    authState.session = null
+    authState.initialized = false
+    try {
+      renderGate()
+      expect(screen.queryByText('LOGIN_ROUTE')).not.toBeInTheDocument()
+    } finally {
+      authState.session = { user: { email: 'tester@example.com' } }
+      authState.initialized = true
+    }
+  })
+
+  it('navigates to /login once initialized=true and session=null', () => {
+    authState.session = null
+    authState.initialized = true
+    try {
+      renderGate()
+      expect(screen.getByText('LOGIN_ROUTE')).toBeInTheDocument()
+    } finally {
+      authState.session = { user: { email: 'tester@example.com' } }
+      authState.initialized = true
+    }
   })
 })

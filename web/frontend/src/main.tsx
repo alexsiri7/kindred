@@ -26,6 +26,7 @@ import { Settings } from './pages/Settings'
 import { Connect } from './pages/Connect'
 import { McpAuth } from './pages/McpAuth'
 import { Privacy } from './pages/Privacy'
+import { AuthCallback } from './pages/AuthCallback'
 
 const router = createBrowserRouter([
   {
@@ -35,6 +36,7 @@ const router = createBrowserRouter([
       // Public routes
       { path: '/', element: <Landing /> },
       { path: '/login', element: <Login /> },
+      { path: '/auth/callback', element: <AuthCallback /> },
       { path: '/mcp-auth', element: <McpAuth /> },
       { path: '/privacy', element: <Privacy /> },
       // Authenticated app routes
