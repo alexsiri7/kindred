@@ -1,39 +1,77 @@
-type KindredMarkProps = {
+import type { CSSProperties, SVGProps } from 'react'
+
+type KindredMarkProps = Omit<SVGProps<SVGSVGElement>, 'width' | 'height'> & {
   size?: number
   accent?: string
   ink?: string
+  inverse?: boolean
+  title?: string
 }
 
-export function KindredMark({ size = 28, accent = '#7C7AB5', ink = '#1A1A1A' }: KindredMarkProps) {
+export function KindredMark({
+  size = 28,
+  accent,
+  ink,
+  inverse = false,
+  title,
+  ...rest
+}: KindredMarkProps) {
+  const resolvedInk = ink ?? (inverse ? 'var(--paper)' : 'var(--ink)')
+  const resolvedAccent = accent ?? 'var(--accent)'
+
+  const ariaProps = title
+    ? { role: 'img' as const, 'aria-label': title }
+    : { 'aria-hidden': true as const }
+
   return (
-    <svg width={size} height={size} viewBox="0 0 64 64" fill="none" aria-hidden="true">
-      {/* outer dashed orbit, faint */}
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 64 64"
+      fill="none"
+      focusable="false"
+      {...ariaProps}
+      {...rest}
+    >
       <ellipse
-        cx="32" cy="32" rx="28" ry="11"
+        cx="32"
+        cy="32"
+        rx="28"
+        ry="11"
         transform="rotate(-22 32 32)"
-        stroke={ink} strokeOpacity="0.18" strokeWidth="1" strokeDasharray="2 4" fill="none"
+        stroke={resolvedInk}
+        strokeOpacity="0.18"
+        strokeWidth="1"
+        strokeDasharray="2 4"
+        fill="none"
       />
-      {/* two interlocking rings */}
-      <circle cx="24" cy="32" r="11" stroke={ink} strokeWidth="2" fill="none" />
-      <circle cx="40" cy="32" r="11" stroke={accent} strokeWidth="2" fill="none" />
-      {/* the meeting point */}
-      <circle cx="32" cy="32" r="2" fill={accent} />
+      <circle cx="24" cy="32" r="11" stroke={resolvedInk} strokeWidth="2" fill="none" />
+      <circle cx="40" cy="32" r="11" stroke={resolvedAccent} strokeWidth="2" fill="none" />
+      <circle cx="32" cy="32" r="2" fill={resolvedAccent} />
     </svg>
   )
 }
 
 type KindredWordmarkProps = {
+  markSize?: number
+  className?: string
+  style?: CSSProperties
   inverse?: boolean
 }
 
-export function KindredWordmark({ inverse = false }: KindredWordmarkProps) {
-  const ink = inverse ? '#FAF7F2' : '#1A1A1A'
+export function KindredWordmark({
+  markSize = 28,
+  className = 'nav-brand',
+  style,
+  inverse = false,
+}: KindredWordmarkProps) {
   return (
-    <div className="nav-brand" style={{ color: ink }}>
-      <KindredMark size={28} ink={ink} />
+    <span className={className} style={style}>
+      <KindredMark size={markSize} inverse={inverse} />
       <span className="wm">
-        <em>Kindred</em><span className="dot">.</span>
+        <em>Kindred</em>
+        <span className="dot">.</span>
       </span>
-    </div>
+    </span>
   )
 }
