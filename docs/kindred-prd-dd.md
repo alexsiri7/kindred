@@ -20,7 +20,7 @@ The core insight: Claude.ai already does voice + text conversation well, ships w
 
 - Building our own chat UI or owning the conversation engine — Claude.ai is the surface
 - Mood scores, sentiment dashboards, gamification
-- Active crisis intervention — defer to Claude.ai's existing safety layers; Kindred adds nothing on top in v1
+- Active crisis intervention — defer to Claude.ai's existing safety layers; Kindred ships only a one-time passive disclaimer in v1, no in-flow detection or response
 - AI-volunteered pattern surveillance ("you've felt this way 5 Sundays in a row") — user-pulled retrieval only at v1
 - Multi-tenant, multi-org, or anything resembling a B2B product
 - Editing entries from the web app
@@ -282,6 +282,7 @@ Read-only. Browser-only. The web app exists to give the user a window onto their
 | `/search?q=...` | Semantic search results across entries |
 | `/settings` | Timezone, transcript on/off, export all data, delete account |
 | `/connect` | "Connect to Claude.ai" page — mints connector token (fallback) or initiates MCP OAuth |
+| `/privacy` | Public privacy policy (UK-GDPR Art. 13). No auth required — indexable, linked from Landing nav and footer. |
 
 **No editing. No write paths.** The only mutations the web app exposes: account deletion, data export, settings toggles. Entries and patterns are written exclusively through the MCP server, which means exclusively through the journaling conversation. One write path.
 
@@ -296,7 +297,7 @@ Non-negotiable in v1; the implementation should not regress on any of these.
 3. **No surveillance.** AI does not volunteer past patterns or entries unprompted in v1. Retrieval is user-pulled.
 4. **One write path.** Entries are created through the journaling conversation only. The web app reads.
 5. **Boring privacy claims, kept honest.** We say "encrypted at rest, no training, you can delete everything." We do **not** say "end-to-end encrypted" — the LLM has to see the content to respond.
-6. **Defer crisis handling.** Claude.ai already has safety layers for self-harm content. Kindred adds nothing on top in v1; this is a noted, deliberate gap to revisit with real usage data.
+6. **Defer active crisis handling.** Claude.ai already has safety layers for self-harm content; Kindred does not attempt active intervention in v1. A one-time passive disclaimer (naming Samaritans for UK users, stating "not a crisis service") is in scope as legal/UX hygiene; an in-conversation safety layer is not. This remains a noted, deliberate gap to revisit with real usage data.
 
 ---
 
@@ -307,6 +308,7 @@ Non-negotiable in v1; the implementation should not regress on any of these.
 - No use of user data for training. We don't train models, but we explicitly select embedding/LLM providers with no-training policies. Verify per provider in `.env.example`.
 - `/settings` exposes data export (full JSON dump of entries + patterns + occurrences) and account deletion (hard delete cascading across all tables).
 - Transcripts are optional per user (toggle in settings). Default: on, because they're useful for retrieval; user can flip to summary-only.
+- Public privacy policy lives at `/privacy` (UK-GDPR Art. 13: identity, purposes, lawful basis, sub-processors, transfers, retention, rights, ICO route). Linked from Landing nav and footer; no auth required so it remains indexable. **Must be updated whenever data flows, sub-processors, or retention change** — the page is the canonical user-facing disclosure.
 
 ---
 

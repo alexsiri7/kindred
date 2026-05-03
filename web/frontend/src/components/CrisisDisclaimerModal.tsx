@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import * as Sentry from '@sentry/react'
 import { api, type UserSettings } from '../api/client'
 
 export function CrisisDisclaimerModal() {
@@ -6,16 +7,47 @@ export function CrisisDisclaimerModal() {
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [dismissed, setDismissed] = useState(false)
+  const dialogRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     api
       .get<UserSettings>('/settings')
       .then(setSettings)
-      .catch(() => {
-        // Fail open: do not block the app on a settings outage.
-        setSettings(null)
+      .catch((e) => {
+        // Fail open: do not block the app on a settings outage,
+        // but record so a regression that bypasses the disclaimer
+        // for everyone is visible in telemetry.
+        Sentry.captureException(e)
       })
   }, [])
+
+  const isOpen =
+    !dismissed && settings !== null && !settings.crisis_disclaimer_acknowledged_at
+
+  useEffect(() => {
+    if (!isOpen) return
+    const dialog = dialogRef.current
+    if (!dialog) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return
+      const focusables = dialog.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      )
+      if (focusables.length === 0) return
+      const first = focusables[0]
+      const last = focusables[focusables.length - 1]
+      const active = document.activeElement as HTMLElement | null
+      if (e.shiftKey && (active === first || !dialog.contains(active))) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && (active === last || !dialog.contains(active))) {
+        e.preventDefault()
+        first.focus()
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen])
 
   const acknowledge = async () => {
     setSubmitting(true)
@@ -27,18 +59,18 @@ export function CrisisDisclaimerModal() {
       setSettings(next)
       setDismissed(true)
     } catch (e) {
+      Sentry.captureException(e)
       setError((e as Error).message)
     } finally {
       setSubmitting(false)
     }
   }
 
-  if (dismissed) return null
-  if (!settings) return null
-  if (settings.crisis_disclaimer_acknowledged_at) return null
+  if (!isOpen) return null
 
   return (
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-labelledby="crisis-disclaimer-title"

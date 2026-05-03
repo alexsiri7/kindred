@@ -20,4 +20,21 @@ describe('Privacy', () => {
     expect(screen.getAllByText(/Samaritans/i).length).toBeGreaterThan(0)
     expect(screen.getByText(/ico\.org\.uk/i)).toBeInTheDocument()
   })
+
+  it('all external links have noopener noreferrer', () => {
+    render(
+      <MemoryRouter>
+        <Privacy />
+      </MemoryRouter>,
+    )
+    const externals = screen
+      .getAllByRole('link')
+      .filter((a) => a.getAttribute('target') === '_blank')
+    expect(externals.length).toBeGreaterThan(0)
+    for (const a of externals) {
+      const rel = a.getAttribute('rel') || ''
+      expect(rel).toMatch(/noopener/)
+      expect(rel).toMatch(/noreferrer/)
+    }
+  })
 })

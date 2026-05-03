@@ -141,6 +141,55 @@ def test_settings_patch_accepts_crisis_ack(
     )
 
 
+def test_settings_get_returns_crisis_ack_after_patch(
+    monkeypatch: pytest.MonkeyPatch, client: TestClient
+) -> None:
+    stored: dict[str, Any] = {"user_metadata": {}}
+
+    def _service_client() -> MagicMock:
+        sb = MagicMock()
+        admin = MagicMock()
+
+        def _get_user_by_id(_user_id: str) -> MagicMock:
+            res = MagicMock()
+            res.user = MagicMock()
+            res.user.user_metadata = stored["user_metadata"]
+            return res
+
+        def _update_user_by_id(_user_id: str, payload: dict[str, Any]) -> None:
+            stored["user_metadata"] = payload["user_metadata"]
+
+        admin.get_user_by_id.side_effect = _get_user_by_id
+        admin.update_user_by_id.side_effect = _update_user_by_id
+        sb.auth.admin = admin
+        return sb
+
+    monkeypatch.setattr(db, "service_client", _service_client)
+
+    # First-time GET (no ack stored) — must include the key as null so the
+    # frontend's hide-condition `if (settings.crisis_disclaimer_acknowledged_at)`
+    # can read a defined value rather than `undefined`.
+    res = client.get("/settings")
+    assert res.status_code == 200
+    body = res.json()
+    assert "crisis_disclaimer_acknowledged_at" in body
+    assert body["crisis_disclaimer_acknowledged_at"] is None
+
+    # PATCH stores the ack timestamp.
+    client.patch(
+        "/settings",
+        json={"crisis_disclaimer_acknowledged_at": "2026-05-03T12:00:00Z"},
+    )
+
+    # Round-trip: subsequent GET must return the persisted ack.
+    res = client.get("/settings")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["crisis_disclaimer_acknowledged_at"] == "2026-05-03T12:00:00Z"
+    # Defaults for the other fields still come back correctly.
+    assert body["transcript_enabled"] is True
+
+
 def test_mint_connector_token(monkeypatch: pytest.MonkeyPatch, client: TestClient) -> None:
     inserted: dict[str, Any] = {}
 
