@@ -52,6 +52,7 @@ _register_oauth_routes(mcp)
 # ---------------------------------------------------------------------------
 # Tool registration
 # ---------------------------------------------------------------------------
+# Leading space is load-bearing: appended to per-tool descriptions, separates the nudge.
 GUIDE_NUDGE = " If you have not already, read the kindred://guide resource for usage guidance."
 
 mcp.tool(

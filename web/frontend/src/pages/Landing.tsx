@@ -133,7 +133,7 @@ function HowItWorks() {
             <span className="glyph">✶</span> How it works
           </div>
           <h2 className="section-title">
-            Three small <em>commands</em>. One quiet practice.
+            Three small <em>moments</em>. One quiet practice.
           </h2>
           <p className="section-sub">
             Kindred lives inside your AI assistant as an MCP connector. Add it once, and three slash commands
@@ -154,7 +154,6 @@ function HowItWorks() {
               Your AI greets you with one open prompt — &ldquo;How are you arriving today?&rdquo; —
               and stays in listening mode. No advice, no reframing, no silver linings.
             </p>
-            <span className="step-cmd">/kindred-start</span>
           </div>
           <div className="step">
             <div className="step-num">
@@ -168,7 +167,6 @@ function HowItWorks() {
               When something feels worth pinning down, walk it through the four quadrants. Name the
               pattern in your own words. Kindred remembers it for next time.
             </p>
-            <span className="step-cmd">/kindred-hcb</span>
           </div>
           <div className="step">
             <div className="step-num">
@@ -182,7 +180,6 @@ function HowItWorks() {
               Your AI offers a one-paragraph summary in your language. You approve it. The entry
               saves. No homework, no streak, no &ldquo;see you tomorrow!&rdquo;.
             </p>
-            <span className="step-cmd">/kindred-close</span>
           </div>
         </div>
       </div>
@@ -194,12 +191,16 @@ function HowItWorks() {
    Conversation demo
    ============================================================ */
 type ScriptItem =
-  | { kind: 'slash'; from: string; text: string; delay: number }
   | { kind: 'user' | 'kindred'; from: string; text: React.ReactNode; delay: number }
   | { kind: 'tool'; delay: number; name: string; args: string; result: string }
 
 const SCRIPT: ScriptItem[] = [
-  { kind: 'slash', from: 'You', text: '/kindred-start', delay: 600 },
+  {
+    kind: 'user',
+    from: 'You',
+    delay: 600,
+    text: <p>Hey.</p>,
+  },
   {
     kind: 'kindred',
     from: 'Kindred',
@@ -254,12 +255,17 @@ const SCRIPT: ScriptItem[] = [
     text: (
       <p>
         Bracing for an unnamed thing. That&apos;s a lot to carry quietly. Do you want to keep
-        talking about it as it is, or look at it more structurally — we could try /kindred-hcb if
-        it&apos;d help.
+        talking about it as it is, or look at it more structurally — thoughts, emotions, body —
+        if it&apos;d help.
       </p>
     ),
   },
-  { kind: 'slash', from: 'You', text: '/kindred-hcb', delay: 800 },
+  {
+    kind: 'user',
+    from: 'You',
+    delay: 800,
+    text: <p>Yeah, let&apos;s look at it.</p>,
+  },
   {
     kind: 'tool',
     delay: 700,
@@ -487,20 +493,6 @@ function Conversation() {
                   </div>
                 )
               }
-              if (m.kind === 'slash') {
-                return (
-                  <div key={i} className="msg slash user">
-                    <div className="msg-avatar" aria-hidden="true">A</div>
-                    <div className="msg-body">
-                      <span className="msg-from">{m.from}</span>
-                      <div className="msg-text">
-                        <span className="cmd-glyph">/</span>
-                        {m.text.slice(1)}
-                      </div>
-                    </div>
-                  </div>
-                )
-              }
               return (
                 <div key={i} className={`msg ${m.kind}`}>
                   <div className="msg-avatar" aria-hidden="true">
@@ -529,10 +521,10 @@ function Conversation() {
           </div>
 
           <form className="chat-input" onSubmit={(e) => e.preventDefault()}>
-            <span className="slash-hint">/ type a slash command</span>
+            <span className="slash-hint">✶ just talk</span>
             <input
               type="text"
-              placeholder={done ? 'Try /kindred-close to wrap up…' : 'Or just keep talking.'}
+              placeholder={done ? "Tell Kindred when you're ready to wrap up…" : 'Or just keep talking.'}
             />
             <button type="submit" className="send-btn" aria-label="Send">
               <svg

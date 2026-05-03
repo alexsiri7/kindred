@@ -30,7 +30,12 @@ async def test_kindred_guide_resource_registered() -> None:
     resources = await mcp.list_resources()
     matching = [r for r in resources if str(r.uri) == GUIDE_URI]
     assert len(matching) == 1
-    assert matching[0].mimeType == "text/markdown"
+    resource = matching[0]
+    assert resource.mimeType == "text/markdown"
+    assert resource.name == "Kindred Guide"
+    # Explicit description= is required (not docstring fallback) per FastMCP gotcha.
+    assert resource.description is not None
+    assert "Behavioural guide" in resource.description
 
 
 async def test_kindred_guide_resource_readable() -> None:
@@ -41,6 +46,11 @@ async def test_kindred_guide_resource_readable() -> None:
     assert body.strip()
     assert "Kindred" in body
     assert "Hot Cross Bun" in body
+    for section in ("## Stance", "## Opening a session", "## Closing a session", "## Tools"):
+        assert section in body, f"Guide missing section header: {section}"
+    registered_tools = {t.name for t in await mcp.list_tools()}
+    for tool_name in registered_tools:
+        assert tool_name in body, f"Guide missing reference to tool: {tool_name}"
 
 
 async def test_old_prompts_unregistered() -> None:
@@ -53,7 +63,7 @@ async def test_old_prompts_unregistered() -> None:
 
 async def test_tool_descriptions_contain_guide_nudge() -> None:
     tools = await mcp.list_tools()
-    assert tools
+    assert {t.name for t in tools} == READ_ONLY_TOOLS | WRITE_TOOLS
     for tool in tools:
         assert tool.description is not None, f"{tool.name} has no description"
         assert GUIDE_URI in tool.description, f"{tool.name} description missing guide nudge"
