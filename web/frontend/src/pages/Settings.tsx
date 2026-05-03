@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { api, type UserSettings } from '../api/client'
 
 const ALL_TIMEZONES: string[] = Intl.supportedValuesOf('timeZone')
@@ -13,7 +13,6 @@ function TimezoneInput({
   const [inputVal, setInputVal] = useState(value)
   const [open, setOpen] = useState(false)
   const [highlighted, setHighlighted] = useState(0)
-  const inputRef = useRef<HTMLInputElement>(null)
 
   // keep local input in sync when parent value changes (e.g. after auto-detect save)
   useEffect(() => {
@@ -58,7 +57,6 @@ function TimezoneInput({
   return (
     <div style={{ position: 'relative', width: 280 }}>
       <input
-        ref={inputRef}
         type="text"
         value={inputVal}
         placeholder="America/New_York"
