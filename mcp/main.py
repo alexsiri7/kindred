@@ -11,6 +11,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
 
+from audit import audited
 from auth import current_user_id, resolve_user_id, resolve_user_id_from_jwt
 from settings import settings
 from tools import entries as entry_tools
@@ -62,12 +63,12 @@ mcp.tool(
         "naturally."
         + GUIDE_NUDGE
     ),
-)(entry_tools.save_entry)
+)(audited("save_entry")(entry_tools.save_entry))
 
 mcp.tool(
     description="Fetch a single entry by date or id." + GUIDE_NUDGE,
     annotations=ToolAnnotations(readOnlyHint=True),
-)(entry_tools.get_entry)
+)(audited("get_entry")(entry_tools.get_entry))
 
 mcp.tool(
     description=(
@@ -76,7 +77,7 @@ mcp.tool(
         + GUIDE_NUDGE
     ),
     annotations=ToolAnnotations(readOnlyHint=True),
-)(entry_tools.list_recent_entries)
+)(audited("list_recent_entries")(entry_tools.list_recent_entries))
 
 mcp.tool(
     description=(
@@ -85,7 +86,7 @@ mcp.tool(
         + GUIDE_NUDGE
     ),
     annotations=ToolAnnotations(readOnlyHint=True),
-)(entry_tools.search_entries)
+)(audited("search_entries")(entry_tools.search_entries))
 
 mcp.tool(
     description=(
@@ -94,12 +95,12 @@ mcp.tool(
         + GUIDE_NUDGE
     ),
     annotations=ToolAnnotations(readOnlyHint=True),
-)(pattern_tools.list_patterns)
+)(audited("list_patterns")(pattern_tools.list_patterns))
 
 mcp.tool(
     description="Fetch a single named pattern with its typical quadrants." + GUIDE_NUDGE,
     annotations=ToolAnnotations(readOnlyHint=True),
-)(pattern_tools.get_pattern)
+)(audited("get_pattern")(pattern_tools.get_pattern))
 
 mcp.tool(
     description=(
@@ -107,12 +108,12 @@ mcp.tool(
         "Never initiate HCB unprompted."
         + GUIDE_NUDGE
     ),
-)(pattern_tools.log_occurrence)
+)(audited("log_occurrence")(pattern_tools.log_occurrence))
 
 mcp.tool(
     description="List occurrences of a named pattern over time." + GUIDE_NUDGE,
     annotations=ToolAnnotations(readOnlyHint=True),
-)(pattern_tools.list_occurrences)
+)(audited("list_occurrences")(pattern_tools.list_occurrences))
 
 
 # ---------------------------------------------------------------------------
