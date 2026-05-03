@@ -11,7 +11,7 @@ mcp/           # MCP server (FastAPI, Python 3.12)
 web/
   backend/     # Web app API (FastAPI, Python 3.12)
   frontend/    # React 19 + TypeScript + Vite + Tailwind + Zustand
-prompts/       # MCP prompt definitions (/kindred-start, /kindred-hcb, /kindred-close)
+prompts/       # kindred-guide.md — behavioural guide served as the kindred://guide MCP resource
 supabase/
   migrations/  # SQL migrations
 scripts/
