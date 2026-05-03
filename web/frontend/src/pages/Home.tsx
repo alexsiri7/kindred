@@ -78,7 +78,7 @@ export function Home() {
             return (
               <Link
                 key={entry.id}
-                to={`/entries/${entry.id}`}
+                to={`/app/entries/${entry.id}`}
                 style={{ textDecoration: 'none', color: 'inherit' }}
               >
                 <div className="entry-row">
