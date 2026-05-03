@@ -1,10 +1,75 @@
 import { useState } from 'react'
 import { api, type ConnectorToken } from '../api/client'
 
+type ClientKey = 'claude' | 'chatgpt' | 'gemini'
+
+type ClientSetup = {
+  key: ClientKey
+  label: string
+  addServer: string
+  oneLinerHint: string
+  testHint: string
+  troubleshooting: { issue: string; fix: string }[]
+}
+
+export const ONE_LINER =
+  'When connected to Kindred, read the kindred://guide resource before doing anything else.'
+
+const CLIENTS: ClientSetup[] = [
+  {
+    key: 'claude',
+    label: 'Claude Projects',
+    addServer:
+      'In Claude.ai, open Settings → Connectors → Add custom connector. Paste the MCP URL above and your connector token.',
+    oneLinerHint: 'Create a Project. In its instructions, paste:',
+    testHint:
+      'Open the project and say "Hi, I\'d like to journal." You should get one gentle open question, no advice.',
+    troubleshooting: [
+      { issue: 'Connector greyed out', fix: 'Re-mint the token above and paste it again.' },
+      {
+        issue: 'AI ignores the one-liner',
+        fix: 'Paste the kindred://guide content directly into project instructions.',
+      },
+    ],
+  },
+  {
+    key: 'chatgpt',
+    label: 'ChatGPT',
+    addServer:
+      'Create a Custom GPT. In Configure → Actions, add the MCP URL above with the connector token as the bearer.',
+    oneLinerHint: 'In Custom GPT instructions, paste:',
+    testHint:
+      'In the GPT, say "Hi, I\'d like to journal." Then say "Let\'s save this session" and confirm save_entry runs.',
+    troubleshooting: [
+      { issue: '401 unauthorized', fix: 'Token may have rotated — re-mint and update the GPT auth.' },
+      {
+        issue: 'Tool not invoked',
+        fix: 'Add a stronger instruction, e.g. "Always call kindred tools when the user asks to save or search."',
+      },
+    ],
+  },
+  {
+    key: 'gemini',
+    label: 'Gemini Gems',
+    addServer:
+      'Create a Gem. In its custom instructions / extensions, register the MCP server above with the bearer token.',
+    oneLinerHint: 'In the Gem instructions, paste:',
+    testHint:
+      'Open the Gem and say "Hi, I\'d like to journal." Confirm the AI asks one open question, then say "Let\'s save this session."',
+    troubleshooting: [
+      {
+        issue: "Gem can't see the MCP server",
+        fix: "Some Gemini surfaces don't support arbitrary MCP yet — use a client that does, or follow the kindred-start prompt manually.",
+      },
+    ],
+  },
+]
+
 export function Connect() {
   const [token, setToken] = useState<ConnectorToken | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [activeClient, setActiveClient] = useState<ClientKey>('claude')
 
   const mint = async () => {
     setError(null)
@@ -26,6 +91,8 @@ export function Connect() {
     ? `${import.meta.env.VITE_MCP_BASE_URL}/sse`
     : 'https://kindred-mcp.interstellarai.net/sse'
 
+  const client = CLIENTS.find((c) => c.key === activeClient) ?? CLIENTS[0]
+
   return (
     <>
       <div className="page-head">
@@ -33,11 +100,11 @@ export function Connect() {
           <span className="glyph">◈</span> Connector
         </div>
         <h1 className="page-title">
-          Add Kindred to <em>Claude</em>.
+          Connect Kindred to <em>your AI assistant</em>.
         </h1>
         <p className="page-sub">
-          Two minutes. Paste this into Claude.ai&apos;s connector settings. Once connected, the
-          three slash commands light up.
+          Two minutes. Paste these into your AI assistant&apos;s connector settings. Once connected,
+          the three slash commands light up.
         </p>
       </div>
 
@@ -150,20 +217,139 @@ export function Connect() {
           </p>
         )}
 
-        {/* Step 3 */}
-        <div className="entry-section-eye">Step 3 · Try it</div>
-        <p
+        {/* Step 3 — per-client tabs */}
+        <div className="entry-section-eye">Step 3 · Set up your AI</div>
+
+        <div
+          role="tablist"
+          aria-label="AI client"
           style={{
-            color: 'var(--ink-2)',
-            fontSize: 14,
-            lineHeight: 1.55,
-            margin: '8px 0 0',
-            maxWidth: '56ch',
+            display: 'flex',
+            gap: 0,
+            borderBottom: '1px solid var(--border)',
+            marginBottom: 'var(--sp-4)',
+            flexWrap: 'wrap',
           }}
         >
-          In Claude.ai, type{' '}
-          <code>/kindred-start</code> to begin a session. That&apos;s it.
-        </p>
+          {CLIENTS.map((c) => {
+            const isActive = c.key === activeClient
+            return (
+              <button
+                key={c.key}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                onClick={() => setActiveClient(c.key)}
+                style={{
+                  background: isActive ? 'var(--bg-elevated)' : 'transparent',
+                  border: 'none',
+                  borderBottom: isActive
+                    ? '2px solid var(--terracotta)'
+                    : '2px solid transparent',
+                  marginBottom: -1,
+                  padding: '10px 16px',
+                  fontFamily: 'var(--font-sans)',
+                  fontSize: 14,
+                  color: isActive ? 'var(--ink)' : 'var(--ink-3)',
+                  cursor: 'pointer',
+                  fontWeight: isActive ? 500 : 400,
+                }}
+              >
+                {c.label}
+              </button>
+            )
+          })}
+        </div>
+
+        <div role="tabpanel" aria-label={`${client.label} setup`}>
+          <div className="entry-section-eye">Step 1 · Add the MCP server</div>
+          <p
+            style={{
+              color: 'var(--ink-2)',
+              fontSize: 14,
+              lineHeight: 1.55,
+              margin: '8px 0 var(--sp-4)',
+              maxWidth: '64ch',
+            }}
+          >
+            {client.addServer}
+          </p>
+
+          <div className="entry-section-eye">Step 2 · Custom instruction</div>
+          <p
+            style={{
+              color: 'var(--ink-2)',
+              fontSize: 14,
+              lineHeight: 1.55,
+              margin: '8px 0 var(--sp-3)',
+              maxWidth: '64ch',
+            }}
+          >
+            {client.oneLinerHint}
+          </p>
+          <div
+            style={{
+              display: 'flex',
+              gap: 8,
+              alignItems: 'center',
+              marginBottom: 'var(--sp-4)',
+            }}
+          >
+            <code
+              style={{
+                flex: 1,
+                padding: '12px 14px',
+                background: 'var(--paper-2)',
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--r-md)',
+                fontFamily: 'var(--font-mono)',
+                fontSize: 13,
+                color: 'var(--ink)',
+                wordBreak: 'break-word',
+              }}
+            >
+              {ONE_LINER}
+            </code>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => void copy(ONE_LINER)}
+            >
+              Copy
+            </button>
+          </div>
+
+          <div className="entry-section-eye">Step 3 · Test it</div>
+          <p
+            style={{
+              color: 'var(--ink-2)',
+              fontSize: 14,
+              lineHeight: 1.55,
+              margin: '8px 0 var(--sp-4)',
+              maxWidth: '64ch',
+            }}
+          >
+            {client.testHint}
+          </p>
+
+          <div className="entry-section-eye">Step 4 · Troubleshooting</div>
+          <ul
+            style={{
+              color: 'var(--ink-2)',
+              fontSize: 14,
+              lineHeight: 1.55,
+              margin: '8px 0 0',
+              paddingLeft: 20,
+              maxWidth: '64ch',
+            }}
+          >
+            {client.troubleshooting.map((t) => (
+              <li key={t.issue} style={{ marginBottom: 6 }}>
+                <strong>{t.issue}</strong> — {t.fix}
+              </li>
+            ))}
+          </ul>
+        </div>
       </div>
     </>
   )

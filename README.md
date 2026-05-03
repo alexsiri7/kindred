@@ -1,6 +1,6 @@
 # Kindred
 
-AI reflective journaling via MCP. Claude.ai is the conversation; Kindred is the memory and structure.
+AI reflective journaling via MCP. Your AI assistant is the conversation; Kindred is the memory and structure. Works with any MCP-capable client (Claude Projects, ChatGPT, Gemini Gems, and others).
 
 See [docs/kindred-prd-dd.md](docs/kindred-prd-dd.md) for the full PRD and design doc.
 
@@ -33,6 +33,10 @@ cd web/backend && pip install -r requirements.txt && uvicorn main:app --host 0.0
 # Web frontend (Vite dev server, port 5173)
 cd web/frontend && npm install && npm run dev
 ```
+
+## Setup
+
+See [docs/setup.md](docs/setup.md) for client-specific setup (Claude Projects, ChatGPT, Gemini Gems).
 
 ## Development
 

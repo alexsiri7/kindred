@@ -84,7 +84,7 @@ export function Layout() {
   ]
 
   const accountItems: { path: string; label: string; icon: IconName }[] = [
-    { path: '/app/connect', label: 'Connect to Claude', icon: 'plug' },
+    { path: '/app/connect', label: 'Connect', icon: 'plug' },
     { path: '/app/settings', label: 'Settings', icon: 'settings' },
   ]
 

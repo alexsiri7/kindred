@@ -1,6 +1,6 @@
-"""POST /connect/token — mint a long-lived bearer token for Claude.ai's connector.
+"""POST /connect/token — mint a long-lived bearer token for the user's MCP client connector.
 
-We don't expose a GET (the user pasted the value into Claude.ai and won't
+We don't expose a GET (the user pasted the value into their MCP client and won't
 reuse a stale one) and don't expose DELETE yet (revocation is on the build
 order but out of scope for v1, per PRD §Build order step 8).
 """

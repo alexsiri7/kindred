@@ -4,9 +4,9 @@
 
 ## Summary
 
-Kindred is an AI reflective journaling assistant. Users journal by talking to Claude (or another MCP-capable host) — Claude provides the conversation; Kindred provides the memory, structure, and reflection scaffolding via an MCP server. A read-only web app lets users browse their entries, see their named patterns, and manage their data.
+Kindred is an AI reflective journaling assistant. Users journal by talking to their MCP-capable AI assistant (Claude, ChatGPT, Gemini, or any other MCP client) — the assistant provides the conversation; Kindred provides the memory, structure, and reflection scaffolding via an MCP server. A read-only web app lets users browse their entries, see their named patterns, and manage their data.
 
-The core insight: Claude.ai already does voice + text conversation well, ships with safety layers, and is something many target users already pay for. Kindred doesn't compete with that — it gives Claude the right tools and prompts to be a good journal companion, and stores what comes out.
+The core insight: modern AI assistants already do voice + text conversation well, ship with safety layers, and many target users already pay for one. Kindred doesn't compete with that — it gives whichever assistant the user has chosen the right tools and prompts to be a good journal companion, and stores what comes out.
 
 ## Goals
 
@@ -18,9 +18,9 @@ The core insight: Claude.ai already does voice + text conversation well, ships w
 
 ## Non-goals (v1)
 
-- Building our own chat UI or owning the conversation engine — Claude.ai is the surface
+- Building our own chat UI or owning the conversation engine — the user's AI assistant is the surface
 - Mood scores, sentiment dashboards, gamification
-- Active crisis intervention — defer to Claude.ai's existing safety layers; Kindred adds nothing on top in v1
+- Active crisis intervention — defer to the user's AI assistant's existing safety layers; Kindred adds nothing on top in v1
 - AI-volunteered pattern surveillance ("you've felt this way 5 Sundays in a row") — user-pulled retrieval only at v1
 - Multi-tenant, multi-org, or anything resembling a B2B product
 - Editing entries from the web app
@@ -33,8 +33,9 @@ Two Railway services backed by one Supabase project.
 
 ```
 ┌───────────────────┐      ┌──────────────────────┐
-│  Claude.ai (host) │─────▶│  Kindred MCP Server  │──┐
-└───────────────────┘ MCP  │  (FastAPI, Railway)  │  │
+│  MCP client       │─────▶│  Kindred MCP Server  │──┐
+│  (Claude / ChatGPT│ MCP  │  (FastAPI, Railway)  │  │
+│   / Gemini / …)   │      │                      │  │
                            └──────────────────────┘  │
                                                      ▼
 ┌───────────────────┐      ┌──────────────────────┐  │   ┌──────────────────┐
@@ -52,7 +53,7 @@ Two Railway services backed by one Supabase project.
 - **Web app frontend**: React 19 + TypeScript + Vite + Tailwind + Zustand (matches reli)
 - **Web app backend**: FastAPI, separate Railway service from the MCP server
 - **Database**: Supabase Postgres with `pgvector` extension
-- **Auth**: Supabase Auth with Google as the OAuth provider (web); MCP OAuth 2.1 flow for Claude.ai
+- **Auth**: Supabase Auth with Google as the OAuth provider (web); MCP OAuth 2.1 flow for the user's AI client (e.g. Claude.ai)
 - **Embeddings**: OpenAI `text-embedding-3-small` via Requesty gateway (matches reli)
 - **Deployment**: Railway (two services), one Supabase project
 - **CI**: GitHub Actions, mirroring reli's `./scripts/gates.sh` discipline (test, lint, typecheck)
@@ -73,11 +74,11 @@ User clicks "Sign in with Google" on the web app. Supabase Auth handles the OAut
 
 ### MCP server — MCP OAuth 2.1
 
-The current MCP spec supports OAuth 2.1 between MCP clients and servers. When a user adds the Kindred connector to Claude.ai, Claude.ai initiates an OAuth flow against the MCP server. The MCP server delegates to Supabase: it redirects the user to a `/mcp/oauth/authorize` page, which checks for a Supabase session (logging the user in via Google if needed), then issues an OAuth code + access token bound to that Supabase user.
+The current MCP spec supports OAuth 2.1 between MCP clients and servers. When a user adds the Kindred connector to their MCP client (e.g. Claude.ai), the client initiates an OAuth flow against the MCP server. The MCP server delegates to Supabase: it redirects the user to a `/mcp/oauth/authorize` page, which checks for a Supabase session (logging the user in via Google if needed), then issues an OAuth code + access token bound to that Supabase user.
 
 On every MCP tool call, the server validates the bearer token, resolves the Supabase user, and queries Postgres with that user's identity in scope (so RLS applies).
 
-**Fallback**: if MCP OAuth turns out to be more setup than is worth doing on day one, ship a connector-token flow instead — the web app has a `/connect` page that mints a long-lived token bound to the user's `user_id`, the user pastes it into Claude.ai's connector config, the MCP server validates it on each call. Document this fallback. Plan to migrate to proper OAuth in step 8 of the build order.
+**Fallback**: if MCP OAuth turns out to be more setup than is worth doing on day one, ship a connector-token flow instead — the web app has a `/connect` page that mints a long-lived token bound to the user's `user_id`, the user pastes it into their MCP client's connector config (e.g. Claude.ai's), the MCP server validates it on each call. Document this fallback. Plan to migrate to proper OAuth in step 8 of the build order.
 
 ---
 
@@ -281,7 +282,7 @@ Read-only. Browser-only. The web app exists to give the user a window onto their
 | `/patterns/:id` | Pattern details, all occurrences chronologically, the four "typical" quadrants |
 | `/search?q=...` | Semantic search results across entries |
 | `/settings` | Timezone, transcript on/off, export all data, delete account |
-| `/connect` | "Connect to Claude.ai" page — mints connector token (fallback) or initiates MCP OAuth |
+| `/connect` | "Connect Kindred to your AI assistant" page — mints connector token + per-client setup tabs (Claude Projects, ChatGPT, Gemini Gems) |
 
 **No editing. No write paths.** The only mutations the web app exposes: account deletion, data export, settings toggles. Entries and patterns are written exclusively through the MCP server, which means exclusively through the journaling conversation. One write path.
 
@@ -296,7 +297,7 @@ Non-negotiable in v1; the implementation should not regress on any of these.
 3. **No surveillance.** AI does not volunteer past patterns or entries unprompted in v1. Retrieval is user-pulled.
 4. **One write path.** Entries are created through the journaling conversation only. The web app reads.
 5. **Boring privacy claims, kept honest.** We say "encrypted at rest, no training, you can delete everything." We do **not** say "end-to-end encrypted" — the LLM has to see the content to respond.
-6. **Defer crisis handling.** Claude.ai already has safety layers for self-harm content. Kindred adds nothing on top in v1; this is a noted, deliberate gap to revisit with real usage data.
+6. **Defer crisis handling.** MCP-capable AI assistants already have safety layers for self-harm content. Kindred adds nothing on top in v1; this is a noted, deliberate gap to revisit with real usage data.
 
 ---
 
@@ -316,7 +317,7 @@ Each step is a usable, deployable increment. Don't skip ahead.
 
 1. **Supabase setup**: project, schema migrations, RLS policies on all tables, `pgvector` enabled, Google provider configured.
 2. **Web app skeleton**: Login → empty entries list. Validates auth end-to-end before any MCP work.
-3. **MCP server v0**: `save_entry`, `get_entry`, `list_recent_entries`. Connector-token auth (the fallback) — get it working in Claude.ai with a hardcoded user_id first, then the token.
+3. **MCP server v0**: `save_entry`, `get_entry`, `list_recent_entries`. Connector-token auth (the fallback) — get it working in an MCP client (e.g. Claude.ai) with a hardcoded user_id first, then the token.
 4. **Prompts v0**: ship `/kindred-start` and `/kindred-close`. Run a real journaling session. Notice what's awkward. Iterate the prompt text — this is where the real product work happens.
 5. **Patterns**: schema usage, `list_patterns`, `log_occurrence`, `/kindred-hcb` prompt. Run a session that examines a pattern.
 6. **Web app reads**: entry detail, pattern list, pattern detail.
@@ -334,7 +335,7 @@ These are open by design. Make a defensible choice when you hit them, and revisi
 - **Timezone edges.** 2am entries, travel days. Use user-local date and ignore the edges.
 - **Pattern detection from data.** AI noticing recurring shapes the user hasn't named yet. Out of scope for v1; will need careful design to avoid surveillance feel.
 - **Weekly / monthly retrospective reports.** Mentioned in original PRD; out of scope for v1. Easy to add once entries and patterns are flowing.
-- **Voice transcripts.** Claude.ai handles voice; the transcript that lands in `save_entry` is text. Whether to mark transcripts as voice-originated is unspecified — probably doesn't matter at v1.
+- **Voice transcripts.** Some MCP clients (e.g. Claude.ai) handle voice; the transcript that lands in `save_entry` is text. Whether to mark transcripts as voice-originated is unspecified — probably doesn't matter at v1.
 - **Mood as freeform vs. categorical.** Currently freeform text. May want categorisation later for retrospectives — defer.
 - **Multi-user sharing.** Out of scope. Don't design for it; don't preclude it.
 - **Crisis protocol.** Out of scope for v1. Revisit once we know what real usage looks like.
