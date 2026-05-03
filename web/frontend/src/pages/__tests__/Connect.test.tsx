@@ -34,29 +34,29 @@ describe('Connect', () => {
 
   it('renders all three client tabs', () => {
     renderConnect()
-    expect(screen.getByRole('tab', { name: /claude/i })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: /chatgpt/i })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: /gemini/i })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /claude desktop/i })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /cursor/i })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /windsurf/i })).toBeInTheDocument()
   })
 
-  it('selects the claude tab by default', () => {
+  it('selects the claude-desktop tab by default', () => {
     renderConnect()
-    expect(screen.getByRole('tab', { name: /claude/i })).toHaveAttribute(
+    expect(screen.getByRole('tab', { name: /claude desktop/i })).toHaveAttribute(
       'aria-selected',
       'true',
     )
-    expect(screen.getByRole('tab', { name: /chatgpt/i })).toHaveAttribute(
+    expect(screen.getByRole('tab', { name: /cursor/i })).toHaveAttribute(
       'aria-selected',
       'false',
     )
   })
 
-  it('switches panel content when ChatGPT tab is clicked', () => {
+  it('switches panel content when Cursor tab is clicked', () => {
     renderConnect()
-    const chatgptTab = screen.getByRole('tab', { name: /chatgpt/i })
-    fireEvent.click(chatgptTab)
-    expect(chatgptTab).toHaveAttribute('aria-selected', 'true')
-    expect(screen.getByText(/save_entry runs/i)).toBeInTheDocument()
+    const cursorTab = screen.getByRole('tab', { name: /cursor/i })
+    fireEvent.click(cursorTab)
+    expect(cursorTab).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByText(/agent mode/i)).toBeInTheDocument()
   })
 
   it('copies the exact ONE_LINER string when the one-liner copy button is clicked', async () => {
