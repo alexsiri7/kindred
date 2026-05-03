@@ -267,6 +267,20 @@ The session is ending. Your tasks:
    advise, or assign homework.
 ```
 
+### Resources
+
+The MCP server also exposes a host-level resource that the user's AI client
+reads on connect — this is the entry point for the provider-agnostic
+onboarding (see [docs/setup.md](setup.md)).
+
+#### `kindred://guide`
+
+A markdown guide that establishes Kindred's stance and the three modes
+(start, examine, close) without relying on slash commands. Users paste a
+one-liner custom instruction into their MCP client of choice; the client
+fetches this resource on connect and applies it for the rest of the
+conversation. Source: `prompts/kindred-guide.md`.
+
 ---
 
 ## Web app surface

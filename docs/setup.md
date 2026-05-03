@@ -98,8 +98,8 @@ open question. Say "Let's save this session" and confirm the entry is saved.
 ### Troubleshooting
 
 - **Gem can't see the MCP server** — some Gemini surfaces don't yet support
-  arbitrary MCP servers. Use a client that does, or follow the
-  `/kindred-start` prompt manually.
+  arbitrary MCP servers. Use a client that does, or paste the contents of
+  `prompts/kindred-start.md` directly into the Gem as your opening message.
 - **One-liner ignored** — paste `kindred-guide.md` directly into the Gem
   instructions.
 

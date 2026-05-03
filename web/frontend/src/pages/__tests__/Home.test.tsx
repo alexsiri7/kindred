@@ -21,7 +21,9 @@ describe('Home', () => {
       screen.getByRole('heading', { name: /library/i }),
     ).toBeInTheDocument()
     await waitFor(() =>
-      expect(screen.getByText(/no entries yet/i)).toBeInTheDocument(),
+      expect(
+        screen.getByText(/no entries yet.*ai assistant/i),
+      ).toBeInTheDocument(),
     )
   })
 })

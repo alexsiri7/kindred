@@ -51,22 +51,56 @@ describe('Connect', () => {
     )
   })
 
-  it('switches panel content when ChatGPT tab is clicked', () => {
+  it.each([
+    {
+      key: 'claude',
+      label: /claude/i,
+      panelText: /one gentle open question/i,
+    },
+    {
+      key: 'chatgpt',
+      label: /chatgpt/i,
+      panelText: /save_entry runs/i,
+    },
+    {
+      key: 'gemini',
+      label: /gemini/i,
+      panelText: /confirm the AI asks one open question/i,
+    },
+  ])('renders $key panel content when its tab is selected', ({ label, panelText }) => {
     renderConnect()
-    const chatgptTab = screen.getByRole('tab', { name: /chatgpt/i })
-    fireEvent.click(chatgptTab)
-    expect(chatgptTab).toHaveAttribute('aria-selected', 'true')
-    expect(screen.getByText(/save_entry runs/i)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('tab', { name: label }))
+    expect(screen.getByRole('tab', { name: label })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    expect(screen.getByText(panelText)).toBeInTheDocument()
   })
 
   it('copies the exact ONE_LINER string when the one-liner copy button is clicked', async () => {
     renderConnect()
-    const oneLinerCode = screen.getByText(ONE_LINER)
-    const copyButton = oneLinerCode.parentElement?.querySelector('button')
-    expect(copyButton).toBeTruthy()
-    fireEvent.click(copyButton!)
+    fireEvent.click(
+      screen.getByRole('button', { name: /copy one-liner instruction/i }),
+    )
     await waitFor(() =>
       expect(navigator.clipboard.writeText).toHaveBeenCalledWith(ONE_LINER),
+    )
+  })
+
+  it('shows an error message when clipboard write fails', async () => {
+    Object.assign(navigator, {
+      clipboard: {
+        writeText: vi.fn(async () => {
+          throw new Error('NotAllowedError: clipboard blocked')
+        }),
+      },
+    })
+    renderConnect()
+    fireEvent.click(
+      screen.getByRole('button', { name: /copy one-liner instruction/i }),
+    )
+    await waitFor(() =>
+      expect(screen.getByText(/couldn't copy to clipboard/i)).toBeInTheDocument(),
     )
   })
 

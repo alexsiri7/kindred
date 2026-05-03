@@ -1,4 +1,4 @@
-"""FastMCP bootstrap: register all 8 tools, 3 prompts, and ASGI bearer middleware."""
+"""FastMCP bootstrap: register 8 tools, 3 prompts, 1 resource, and ASGI bearer middleware."""
 
 from __future__ import annotations
 
@@ -81,8 +81,9 @@ def kindred_close() -> str:
 
 
 # ---------------------------------------------------------------------------
-# Resources (host-level, always-on guide referenced by the one-liner custom
-# instruction users paste into their MCP client of choice).
+# Resources. The one-liner custom instruction users paste into their MCP
+# client tells the assistant to read kindred://guide on connect, so this
+# acts as a read-on-connect guide.
 # ---------------------------------------------------------------------------
 @mcp.resource("kindred://guide", title="Kindred — AI Guide", mime_type="text/markdown")
 def kindred_guide() -> str:

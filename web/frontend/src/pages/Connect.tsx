@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { api, type ConnectorToken } from '../api/client'
 
 type ClientKey = 'claude' | 'chatgpt' | 'gemini'
@@ -68,7 +68,7 @@ const CLIENTS: ClientSetup[] = [
 export function Connect() {
   const [token, setToken] = useState<ConnectorToken | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
+  const [copiedKey, setCopiedKey] = useState<string | null>(null)
   const [activeClient, setActiveClient] = useState<ClientKey>('claude')
 
   const mint = async () => {
@@ -81,17 +81,36 @@ export function Connect() {
     }
   }
 
-  const copy = async (text: string) => {
-    await navigator.clipboard.writeText(text)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1500)
+  const copy = async (text: string, key: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopiedKey(key)
+      setTimeout(() => setCopiedKey((k) => (k === key ? null : k)), 1500)
+    } catch (e) {
+      setError(
+        `Couldn't copy to clipboard (${(e as Error).message}). ` +
+          `Select the text and copy it manually.`,
+      )
+    }
   }
 
   const MCP_URL = import.meta.env.VITE_MCP_BASE_URL
     ? `${import.meta.env.VITE_MCP_BASE_URL}/sse`
     : 'https://kindred-mcp.interstellarai.net/sse'
 
-  const client = CLIENTS.find((c) => c.key === activeClient) ?? CLIENTS[0]
+  const client = CLIENTS.find((c) => c.key === activeClient)!
+
+  const onTabKeyDown = (e: ReactKeyboardEvent<HTMLButtonElement>) => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
+    e.preventDefault()
+    const idx = CLIENTS.findIndex((x) => x.key === activeClient)
+    const next =
+      e.key === 'ArrowRight'
+        ? CLIENTS[(idx + 1) % CLIENTS.length]
+        : CLIENTS[(idx - 1 + CLIENTS.length) % CLIENTS.length]
+    setActiveClient(next.key)
+    document.getElementById(`tab-${next.key}`)?.focus()
+  }
 
   return (
     <>
@@ -145,9 +164,10 @@ export function Connect() {
           <button
             type="button"
             className="btn btn-secondary"
-            onClick={() => void copy(MCP_URL)}
+            aria-label="Copy MCP server URL"
+            onClick={() => void copy(MCP_URL, 'mcp')}
           >
-            Copy
+            {copiedKey === 'mcp' ? 'Copied' : 'Copy'}
           </button>
         </div>
 
@@ -204,9 +224,10 @@ export function Connect() {
             <button
               type="button"
               className="btn btn-secondary"
-              onClick={() => void copy(token.token)}
+              aria-label="Copy connector token"
+              onClick={() => void copy(token.token, 'token')}
             >
-              {copied ? 'Copied' : 'Copy'}
+              {copiedKey === 'token' ? 'Copied' : 'Copy'}
             </button>
           )}
         </div>
@@ -236,10 +257,14 @@ export function Connect() {
             return (
               <button
                 key={c.key}
+                id={`tab-${c.key}`}
                 type="button"
                 role="tab"
                 aria-selected={isActive}
+                aria-controls={`panel-${c.key}`}
+                tabIndex={isActive ? 0 : -1}
                 onClick={() => setActiveClient(c.key)}
+                onKeyDown={onTabKeyDown}
                 style={{
                   background: isActive ? 'var(--bg-elevated)' : 'transparent',
                   border: 'none',
@@ -261,7 +286,11 @@ export function Connect() {
           })}
         </div>
 
-        <div role="tabpanel" aria-label={`${client.label} setup`}>
+        <div
+          role="tabpanel"
+          id={`panel-${client.key}`}
+          aria-labelledby={`tab-${client.key}`}
+        >
           <div className="entry-section-eye">Step 1 · Add the MCP server</div>
           <p
             style={{
@@ -313,9 +342,10 @@ export function Connect() {
             <button
               type="button"
               className="btn btn-secondary"
-              onClick={() => void copy(ONE_LINER)}
+              aria-label="Copy one-liner instruction"
+              onClick={() => void copy(ONE_LINER, 'oneliner')}
             >
-              Copy
+              {copiedKey === 'oneliner' ? 'Copied' : 'Copy'}
             </button>
           </div>
 
