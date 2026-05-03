@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api, type UserSettings } from '../api/client'
+import { Button } from './Button'
 
 export function CrisisDisclaimerModal() {
   const [settings, setSettings] = useState<UserSettings | null>(null)
@@ -115,16 +116,16 @@ export function CrisisDisclaimerModal() {
           </p>
         )}
 
-        <button
-          type="button"
-          className="btn btn-primary btn-lg"
+        <Button
+          variant="primary"
+          size="lg"
           autoFocus
           disabled={submitting}
           onClick={() => void acknowledge()}
           style={{ width: '100%', justifyContent: 'center' }}
         >
           {submitting ? 'Saving…' : 'I understand'}
-        </button>
+        </Button>
       </div>
     </div>
   )

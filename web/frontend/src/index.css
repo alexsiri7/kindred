@@ -453,17 +453,27 @@ button { font-family: inherit; }
 .toggle.on .toggle-thumb { left: 19px; }
 .toggle-label { font-size: 13.5px; color: var(--ink); }
 
-.btn { font-family: var(--font-body); font-weight: 500; border-radius: var(--r-sm); border: 1px solid transparent; cursor: pointer; transition: all 120ms var(--ease-out); display: inline-flex; align-items: center; gap: 8px; font-size: 14px; padding: 9px 16px; }
+.btn { font-family: var(--font-body); font-weight: 500; border-radius: var(--r-sm); border: 1px solid transparent; cursor: pointer; transition: all 120ms var(--ease-out); display: inline-flex; align-items: center; gap: 8px; font-size: 14px; padding: 9px 16px; white-space: nowrap; }
 .btn:active { transform: scale(0.98); }
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn:disabled { cursor: not-allowed; opacity: 0.5; }
 .btn-primary { background: var(--terracotta); color: var(--paper); }
-.btn-primary:hover { background: var(--terracotta-2); }
+.btn-primary:hover { background: var(--terracotta-2); box-shadow: var(--shadow-sm); }
 .btn-secondary { background: transparent; color: var(--ink); border-color: var(--border-strong); }
 .btn-secondary:hover { background: var(--paper-2); }
+.btn-ghost { background: transparent; color: var(--ink); }
+.btn-ghost:hover { background: var(--paper-2); }
 .btn-danger { background: transparent; color: var(--rust); border-color: var(--rust); }
 .btn-danger:hover { background: var(--rust); color: var(--paper); }
+.btn-link { background: transparent; color: var(--slate); text-decoration: underline; text-underline-offset: 3px; border-color: transparent; padding: 0; }
+.btn-link:hover { color: var(--terracotta); }
 .btn-md { font-size: 15px; padding: 10px 18px; }
 .btn-sm { font-size: 13px; padding: 6px 12px; }
 .btn-lg { font-size: 16px; padding: 13px 22px; }
+@media (prefers-reduced-motion: reduce) {
+  .btn { transition: none; }
+  .btn:active { transform: none; }
+}
 
 /* responsive */
 @media (max-width: 800px) {

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api, type UserSettings } from '../api/client'
+import { Button } from '../components/Button'
 
 const ALL_TIMEZONES: string[] = Intl.supportedValuesOf('timeZone')
 
@@ -302,13 +303,12 @@ export function Settings() {
           </p>
         </div>
         <div className="set-control">
-          <button
-            type="button"
-            className="btn btn-secondary"
+          <Button
+            variant="secondary"
             onClick={() => void exportData()}
           >
             <DownloadIcon /> Export as JSON
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -320,13 +320,12 @@ export function Settings() {
           </p>
         </div>
         <div className="set-control">
-          <button
-            type="button"
-            className="btn btn-danger"
+          <Button
+            variant="danger"
             onClick={() => void deleteAccount()}
           >
             <TrashIcon /> Delete everything
-          </button>
+          </Button>
         </div>
       </div>
     </>
