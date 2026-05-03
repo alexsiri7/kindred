@@ -132,15 +132,6 @@ def kindred_guide() -> str:
 
 
 # ---------------------------------------------------------------------------
-# Resources (host-level, always-on guide referenced by the one-liner custom
-# instruction users paste into their MCP client of choice).
-# ---------------------------------------------------------------------------
-@mcp.resource("kindred://guide", title="Kindred — AI Guide", mime_type="text/markdown")
-def kindred_guide() -> str:
-    return (PROMPTS_DIR / "kindred-guide.md").read_text(encoding="utf-8")
-
-
-# ---------------------------------------------------------------------------
 # ASGI middleware: read Authorization header, resolve user_id into contextvar.
 # ---------------------------------------------------------------------------
 Scope = MutableMapping[str, Any]
