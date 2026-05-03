@@ -45,6 +45,12 @@ confirm the assistant calls `save_entry`.
 - **AI ignores the one-liner** — paste the contents of `kindred-guide.md`
   directly into the project instructions instead.
 - **Tool calls fail with 401** — token may have rotated; re-mint and update.
+- **Tool calls fail with 429 / "rate_limited"** — Kindred caps tool calls
+  per user per minute (60 total, 10 for `search_entries`) to keep the
+  service affordable. Wait the number of seconds in the `retry_after`
+  field and try again. This rarely affects normal journaling; if it keeps
+  happening, you may have a runaway loop in the assistant — start a new
+  conversation.
 
 ---
 
@@ -70,6 +76,12 @@ Then say "Let's save this session" and confirm `save_entry` runs.
 
 - **401 unauthorized** — token may have rotated; re-mint and update the
   GPT's auth.
+- **Tool calls fail with 429 / "rate_limited"** — Kindred caps tool calls
+  per user per minute (60 total, 10 for `search_entries`) to keep the
+  service affordable. Wait the number of seconds in the `retry_after`
+  field and try again. This rarely affects normal journaling; if it keeps
+  happening, you may have a runaway loop in the assistant — start a new
+  conversation.
 - **Tool not invoked** — add a stronger instruction, e.g. "Always call
   Kindred tools when the user asks to save or search."
 - **One-liner not respected** — some surfaces don't auto-read MCP resources.
@@ -100,6 +112,12 @@ open question. Say "Let's save this session" and confirm the entry is saved.
 - **Gem can't see the MCP server** — some Gemini surfaces don't yet support
   arbitrary MCP servers. Use a client that does, or follow the
   `/kindred-start` prompt manually.
+- **Tool calls fail with 429 / "rate_limited"** — Kindred caps tool calls
+  per user per minute (60 total, 10 for `search_entries`) to keep the
+  service affordable. Wait the number of seconds in the `retry_after`
+  field and try again. This rarely affects normal journaling; if it keeps
+  happening, you may have a runaway loop in the assistant — start a new
+  conversation.
 - **One-liner ignored** — paste `kindred-guide.md` directly into the Gem
   instructions.
 

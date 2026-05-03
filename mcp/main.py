@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import logging
 from collections.abc import Awaitable, Callable, MutableMapping
 from pathlib import Path
 from typing import Any
@@ -11,11 +13,15 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
 
+import rate_limit
 from audit import audited
 from auth import current_user_id, resolve_user_id, resolve_user_id_from_jwt
+from rate_limit import RateLimiter
 from settings import settings
 from tools import entries as entry_tools
 from tools import patterns as pattern_tools
+
+logger = logging.getLogger(__name__)
 
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
 
@@ -145,7 +151,7 @@ _PUBLIC_PATH_PREFIXES = ("/.well-known/", "/oauth/")
 
 
 def _is_public_path(path: str) -> bool:
-    return any(path.startswith(p) for p in _PUBLIC_PATH_PREFIXES)
+    return path.startswith(_PUBLIC_PATH_PREFIXES)
 
 
 def with_user_context(app: ASGIApp) -> ASGIApp:
@@ -214,8 +220,141 @@ def with_user_context(app: ASGIApp) -> ASGIApp:
     return wrapper
 
 
+def with_rate_limit(app: ASGIApp, limiter: RateLimiter | None = None) -> ASGIApp:
+    """ASGI middleware: enforce per-user rate limits on /mcp/ tool calls (#42).
+
+    Composes inside ``with_user_context`` so the resolved ``current_user_id``
+    is available. Public paths (``/healthz``, ``/.well-known/...``,
+    ``/oauth/...``) and unauthenticated requests pass through — the upstream
+    401 handler runs before us, so a request that would 401 must not 429.
+
+    Body buffering is required because all MCP traffic flows through one
+    endpoint and we need ``params.name`` for per-tool buckets. We replay the
+    buffered body to the inner app so FastMCP sees an unmodified request.
+    """
+
+    async def wrapper(scope: Scope, receive: Receive, send: Send) -> None:
+        if scope.get("type") != "http":
+            await app(scope, receive, send)
+            return
+        path = scope.get("path", "")
+        if _is_public_path(path):
+            await app(scope, receive, send)
+            return
+
+        user_id = current_user_id.get(None)
+        if user_id is None:
+            # Defensive: with the standard middleware order
+            # (with_user_context outer), unauthenticated requests are
+            # 401'd upstream and never reach here. This guards against
+            # direct mounts or reordering — auth must always win over 429.
+            await app(scope, receive, send)
+            return
+
+        active_limiter = limiter if limiter is not None else rate_limit.default_limiter()
+        if active_limiter.is_disabled:
+            # Kill-switch true bypass: skip body buffering entirely so the
+            # incident-response switch removes the middleware from the path.
+            await app(scope, receive, send)
+            return
+
+        # Buffer the request body so we can peek the JSON-RPC method/tool name.
+        body_chunks: list[bytes] = []
+        trailing: MutableMapping[str, Any] | None = None
+        more_body = True
+        while more_body:
+            message = await receive()
+            if message.get("type") == "http.request":
+                chunk = message.get("body", b"")
+                if chunk:
+                    body_chunks.append(chunk)
+                more_body = bool(message.get("more_body", False))
+            else:
+                # Disconnect or unexpected message — remember it so the
+                # inner app sees it on the next receive() (e.g. a slow
+                # tool body that polls request.is_disconnected()).
+                trailing = message
+                more_body = False
+        body_bytes = b"".join(body_chunks)
+
+        tool_name: str | None = None
+        if body_bytes:
+            try:
+                parsed = json.loads(body_bytes)
+            except json.JSONDecodeError:
+                logger.debug(
+                    "rate_limit: body parse failed; per-tool cap will not apply"
+                )
+                parsed = None
+            if isinstance(parsed, dict) and parsed.get("method") == "tools/call":
+                params = parsed.get("params")
+                if isinstance(params, dict):
+                    name = params.get("name")
+                    if isinstance(name, str):
+                        tool_name = name
+
+        decision = active_limiter.check(user_id=user_id, tool_name=tool_name)
+
+        if not decision.allowed:
+            # Single-line INFO log for ops visibility — never log the body.
+            logger.info(
+                "rate_limited user=%s bucket=%s retry_after=%d",
+                user_id[:8],
+                tool_name or "global",
+                decision.retry_after_seconds,
+            )
+            retry_after = str(decision.retry_after_seconds).encode("ascii")
+            body = (
+                f'{{"error":"rate_limited","retry_after":{decision.retry_after_seconds}}}'
+            ).encode()
+            await send(
+                {
+                    "type": "http.response.start",
+                    "status": 429,
+                    "headers": [
+                        [b"content-type", b"application/json"],
+                        [b"retry-after", retry_after],
+                    ],
+                }
+            )
+            await send({"type": "http.response.body", "body": body})
+            return
+
+        # Replay the buffered body to the inner app: yield one http.request
+        # event, then forward subsequent reads to the original receive.
+        # Any trailing non-http.request message (e.g. http.disconnect) we
+        # consumed during buffering is replayed before falling through.
+        replayed = False
+        pending_trailing = trailing
+
+        async def replay_receive() -> MutableMapping[str, Any]:
+            nonlocal replayed, pending_trailing
+            if not replayed:
+                replayed = True
+                return {
+                    "type": "http.request",
+                    "body": body_bytes,
+                    "more_body": False,
+                }
+            if pending_trailing is not None:
+                msg = pending_trailing
+                pending_trailing = None
+                return msg
+            return await receive()
+
+        await app(scope, replay_receive, send)
+
+    return wrapper
+
+
 def build_app() -> ASGIApp:
-    return with_user_context(mcp.streamable_http_app())
+    # Eagerly validate the per-tool config so a malformed
+    # MCP_RATE_LIMIT_PER_TOOL fails the process at startup rather than
+    # surfacing as an opaque per-request 500 once traffic arrives. We
+    # parse-and-discard rather than building the limiter so the cached
+    # instance still resolves lazily on first request.
+    rate_limit._parse_per_tool_config(settings.mcp_rate_limit_per_tool)
+    return with_user_context(with_rate_limit(mcp.streamable_http_app()))
 
 
 app = build_app()
