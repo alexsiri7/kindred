@@ -18,6 +18,14 @@ describe('Button', () => {
     expect(btn).not.toHaveClass('btn-primary')
   })
 
+  it.each(['primary', 'secondary', 'ghost', 'danger', 'link'] as const)(
+    'variant="%s" produces btn + btn-%s',
+    (variant) => {
+      render(<Button variant={variant}>X</Button>)
+      expect(screen.getByRole('button')).toHaveClass('btn', `btn-${variant}`)
+    },
+  )
+
   it('size="lg" produces btn-lg; without size no size class is emitted', () => {
     const { rerender } = render(<Button size="lg">Large</Button>)
     expect(screen.getByRole('button')).toHaveClass('btn-lg')
@@ -27,6 +35,11 @@ describe('Button', () => {
     expect(btn).not.toHaveClass('btn-sm')
     expect(btn).not.toHaveClass('btn-md')
     expect(btn).not.toHaveClass('btn-lg')
+  })
+
+  it.each(['sm', 'md', 'lg'] as const)('size="%s" produces btn-%s', (size) => {
+    render(<Button size={size}>X</Button>)
+    expect(screen.getByRole('button')).toHaveClass(`btn-${size}`)
   })
 
   it('appends custom className without dropping base classes', () => {
@@ -76,5 +89,22 @@ describe('Button', () => {
 
     rerender(<Button type="submit">Submit</Button>)
     expect(screen.getByRole('button')).toHaveAttribute('type', 'submit')
+  })
+
+  it('forwards arbitrary HTML attributes (style, aria-*, data-*, autoFocus) to the button', () => {
+    render(
+      <Button
+        style={{ width: '100%' }}
+        aria-label="Save changes"
+        data-testid="save-btn"
+        autoFocus
+      >
+        Save
+      </Button>,
+    )
+    const btn = screen.getByTestId('save-btn')
+    expect(btn).toHaveAttribute('aria-label', 'Save changes')
+    expect(btn).toHaveStyle({ width: '100%' })
+    expect(document.activeElement).toBe(btn)
   })
 })

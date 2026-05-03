@@ -1,9 +1,9 @@
-type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'link'
-type Size = 'sm' | 'md' | 'lg'
+export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'link'
+export type ButtonSize = 'sm' | 'md' | 'lg'
 
-type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: Variant
-  size?: Size
+export type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: ButtonVariant
+  size?: ButtonSize
   ref?: React.Ref<HTMLButtonElement>
 }
 
