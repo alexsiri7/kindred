@@ -32,7 +32,10 @@ export function Home() {
       .catch((e: Error) => setError(e.message))
   }, [])
 
-  const byMonth = entries ? groupByMonth(entries) : {}
+  if (error) return <p style={{ color: 'var(--rust)' }}>{error}</p>
+  if (entries === null) return <p style={{ color: 'var(--ink-3)' }}>Loading…</p>
+
+  const byMonth = groupByMonth(entries)
 
   return (
     <>
@@ -46,9 +49,6 @@ export function Home() {
         <p className="page-sub">Your entries, kept quietly.</p>
       </div>
 
-      {error && <p style={{ color: 'var(--rust)' }}>{error}</p>}
-      {entries === null && <p style={{ color: 'var(--ink-3)' }}>Loading…</p>}
-
       <div className="readonly-banner">
         <span className="lock">🔒</span>
         <span>
@@ -57,7 +57,7 @@ export function Home() {
         </span>
       </div>
 
-      {entries?.length === 0 && (
+      {entries.length === 0 && (
         <p style={{ color: 'var(--ink-3)' }}>
           No entries yet. Start a journaling session in Claude.ai.
         </p>
