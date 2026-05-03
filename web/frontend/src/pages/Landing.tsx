@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { KindredMark } from '../components/Brand'
+import { useAuth } from '../store/auth'
 
 /* ============================================================
    Nav
    ============================================================ */
 function Nav() {
+  const session = useAuth((s) => s.session)
   return (
     <nav className="nav">
       <Link to="/" className="nav-brand" style={{ textDecoration: 'none' }}>
@@ -22,7 +24,10 @@ function Nav() {
         <a href="#privacy" className="nav-link">Privacy</a>
       </div>
       <div className="nav-cta">
-        <Link to="/login" className="nav-link">Sign in</Link>
+        {session
+          ? <Link to="/app" className="nav-link">Open app</Link>
+          : <Link to="/login" className="nav-link">Sign in</Link>
+        }
         <Link to="/app" className="btn btn-primary btn-sm">Add to Claude</Link>
       </div>
     </nav>
