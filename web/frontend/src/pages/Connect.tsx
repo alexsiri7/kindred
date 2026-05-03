@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { api, type ConnectorToken } from '../api/client'
 
-type ClientKey = 'claude' | 'chatgpt' | 'gemini'
+type ClientKey = 'claude-desktop' | 'cursor' | 'windsurf'
 
 type ClientSetup = {
   key: ClientKey
@@ -10,58 +10,84 @@ type ClientSetup = {
   oneLinerHint: string
   testHint: string
   troubleshooting: { issue: string; fix: string }[]
+  docsUrl: string
 }
 
 export const ONE_LINER =
-  'When connected to Kindred, read the kindred://guide resource before doing anything else.'
+  'When connected to Kindred, call the read_guide tool before doing anything else.'
 
 const CLIENTS: ClientSetup[] = [
   {
-    key: 'claude',
-    label: 'Claude Projects',
+    key: 'claude-desktop',
+    label: 'Claude Desktop',
     addServer:
-      'In Claude.ai, open Settings → Connectors → Add custom connector. Paste the MCP URL above and your connector token.',
-    oneLinerHint: 'Create a Project. In its instructions, paste:',
+      'Open claude_desktop_config.json (macOS: ~/Library/Application Support/Claude/claude_desktop_config.json, Windows: %APPDATA%\\Claude\\claude_desktop_config.json). Under "mcpServers", add an entry with "command": "npx", "args": ["mcp-remote@latest", "<MCP URL>", "--header", "Authorization: Bearer <token>"]. Save the file and fully quit and relaunch Claude Desktop.',
+    oneLinerHint: 'Create a new Project. In its system prompt / instructions, paste:',
     testHint:
-      'Open the project and say "Hi, I\'d like to journal." You should get one gentle open question, no advice.',
+      'Open the project and say "Hi, I\'d like to journal." You should see the read_guide tool called automatically, then one gentle open question with no advice.',
     troubleshooting: [
-      { issue: 'Connector greyed out', fix: 'Re-mint the token above and paste it again.' },
       {
-        issue: 'AI ignores the one-liner',
-        fix: 'Paste the kindred://guide content directly into project instructions.',
+        issue: 'Server not listed in Claude',
+        fix: 'Fully quit Claude Desktop (Cmd+Q / Alt+F4) and relaunch — the config is only read at startup.',
+      },
+      {
+        issue: '401 Unauthorized',
+        fix: 'Re-mint your connector token above and update the Authorization header value in the config, then restart.',
+      },
+      {
+        issue: 'npx not found',
+        fix: 'Ensure Node.js 18+ is installed. Run "npx mcp-remote@latest --version" in a terminal to verify.',
       },
     ],
+    docsUrl: 'https://modelcontextprotocol.io/docs/develop/connect-local-servers',
   },
   {
-    key: 'chatgpt',
-    label: 'ChatGPT',
+    key: 'cursor',
+    label: 'Cursor',
     addServer:
-      'Create a Custom GPT. In Configure → Actions, add the MCP URL above with the connector token as the bearer.',
-    oneLinerHint: 'In Custom GPT instructions, paste:',
+      'Create or open ~/.cursor/mcp.json (global) or .cursor/mcp.json in your project root. Add an entry under "mcpServers" with "url": "<MCP URL>" and "headers": {"Authorization": "Bearer <token>"}. Save the file — Cursor picks up the change immediately without a restart.',
+    oneLinerHint: 'In Cursor Rules (global or per-project), paste:',
     testHint:
-      'In the GPT, say "Hi, I\'d like to journal." Then say "Let\'s save this session" and confirm save_entry runs.',
+      'Open a Cursor chat and say "Hi, I\'d like to journal." The read_guide tool should be called first, then you\'ll get one gentle question.',
     troubleshooting: [
-      { issue: '401 unauthorized', fix: 'Token may have rotated — re-mint and update the GPT auth.' },
       {
-        issue: 'Tool not invoked',
-        fix: 'Add a stronger instruction, e.g. "Always call kindred tools when the user asks to save or search."',
+        issue: 'Server not appearing in Cursor',
+        fix: 'Check that your mcp.json is valid JSON. Open Settings → MCP to see the server list and any error messages.',
+      },
+      {
+        issue: '401 Unauthorized',
+        fix: 'Re-mint your connector token above and update the Authorization header value in mcp.json.',
+      },
+      {
+        issue: 'Tools not invoked',
+        fix: 'Make sure Agent mode is enabled (not plain Chat). MCP tools are only available in Agent mode.',
       },
     ],
+    docsUrl: 'https://cursor.com/docs/mcp',
   },
   {
-    key: 'gemini',
-    label: 'Gemini Gems',
+    key: 'windsurf',
+    label: 'Windsurf',
     addServer:
-      'Create a Gem. In its custom instructions / extensions, register the MCP server above with the bearer token.',
-    oneLinerHint: 'In the Gem instructions, paste:',
+      'Open ~/.codeium/windsurf/mcp_config.json. Add an entry under "mcpServers" with "serverUrl": "<MCP URL>" and "headers": {"Authorization": "Bearer <token>"}. Save the file and reload Windsurf (Cmd+Shift+P → "Reload Window").',
+    oneLinerHint: 'In Windsurf global rules or your workspace instructions, paste:',
     testHint:
-      'Open the Gem and say "Hi, I\'d like to journal." Confirm the AI asks one open question, then say "Let\'s save this session."',
+      'Open the Cascade panel and say "Hi, I\'d like to journal." The read_guide tool should fire first, then you\'ll get one open question.',
     troubleshooting: [
       {
-        issue: "Gem can't see the MCP server",
-        fix: "Some Gemini surfaces don't support arbitrary MCP yet — use a client that does, or follow the kindred-start prompt manually.",
+        issue: 'Server not listed in Cascade',
+        fix: 'Reload the window (Cmd+Shift+P → "Reload Window") after editing mcp_config.json. Check the Cascade panel for error details.',
+      },
+      {
+        issue: '401 Unauthorized',
+        fix: 'Re-mint your connector token above and update the Authorization header value in mcp_config.json.',
+      },
+      {
+        issue: 'mcp_config.json not found',
+        fix: 'Create the file and its parent directory: mkdir -p ~/.codeium/windsurf && echo \'{"mcpServers":{}}\' > ~/.codeium/windsurf/mcp_config.json',
       },
     ],
+    docsUrl: 'https://docs.windsurf.com/windsurf/cascade/mcp',
   },
 ]
 
@@ -69,7 +95,7 @@ export function Connect() {
   const [token, setToken] = useState<ConnectorToken | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
-  const [activeClient, setActiveClient] = useState<ClientKey>('claude')
+  const [activeClient, setActiveClient] = useState<ClientKey>('claude-desktop')
 
   const mint = async () => {
     setError(null)
@@ -88,8 +114,8 @@ export function Connect() {
   }
 
   const MCP_URL = import.meta.env.VITE_MCP_BASE_URL
-    ? `${import.meta.env.VITE_MCP_BASE_URL}/sse`
-    : 'https://kindred-mcp.interstellarai.net/sse'
+    ? `${import.meta.env.VITE_MCP_BASE_URL}/mcp`
+    : 'https://kindred-mcp.interstellarai.net/mcp'
 
   const client = CLIENTS.find((c) => c.key === activeClient) ?? CLIENTS[0]
 
@@ -349,6 +375,14 @@ export function Connect() {
               </li>
             ))}
           </ul>
+          <a
+            href={client.docsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: 'var(--terracotta)', fontSize: 14, display: 'inline-block', marginTop: 'var(--sp-3)' }}
+          >
+            Official docs →
+          </a>
         </div>
       </div>
     </>

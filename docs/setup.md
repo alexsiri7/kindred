@@ -4,7 +4,7 @@ Kindred is provider-agnostic: any MCP-capable AI assistant can be the
 conversation surface. The flow is the same for every client:
 
 1. Mint a connector token at `/app/connect`.
-2. Add the Kindred MCP server (`https://kindred-mcp.interstellarai.net/sse`)
+2. Add the Kindred MCP server (`https://kindred-mcp.interstellarai.net/mcp`)
    to your AI assistant, with the token as the bearer.
 3. Paste the one-liner custom instruction so the assistant reads
    `kindred://guide` on connect:

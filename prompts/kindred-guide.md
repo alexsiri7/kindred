@@ -84,6 +84,8 @@ When the user signals they are done (or asks to wrap up):
 
 ## Tools
 
+- `read_guide` — fetch this guide. Call once at the start of every session if
+  you have not already read it via the kindred://guide resource.
 - `save_entry` — call at the end of a session, after confirming the summary
   with the user.
 - `get_entry` — fetch a single entry by date or id.
