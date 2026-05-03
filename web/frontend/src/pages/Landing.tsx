@@ -21,7 +21,7 @@ function Nav() {
         <a href="#how" className="nav-link">How it works</a>
         <a href="#demo" className="nav-link">Demo</a>
         <a href="#patterns" className="nav-link">Patterns</a>
-        <a href="#privacy" className="nav-link">Privacy</a>
+        <Link to="/privacy" className="nav-link">Privacy</Link>
       </div>
       <div className="nav-cta">
         {session
@@ -680,6 +680,11 @@ function Privacy() {
             </p>
           </div>
         </div>
+        <div style={{ marginTop: 'var(--sp-5)' }}>
+          <Link to="/privacy" className="nav-link">
+            Read the full policy →
+          </Link>
+        </div>
       </div>
     </section>
   )
@@ -741,7 +746,7 @@ function EndCap() {
           InterstellarAI
         </div>
         <div>
-          <a href="#privacy">Privacy</a>
+          <Link to="/privacy">Privacy</Link>
           <a href="#">Terms</a>
           <a href="#">Field notes</a>
         </div>

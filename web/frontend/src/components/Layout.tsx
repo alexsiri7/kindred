@@ -2,6 +2,7 @@ import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router'
 import { useAuth } from '../store/auth'
 import { supabase } from '../lib/supabase'
 import { KindredMark } from './Brand'
+import { CrisisDisclaimerModal } from './CrisisDisclaimerModal'
 
 type IconName = 'book' | 'layers' | 'search' | 'settings' | 'plug'
 
@@ -162,6 +163,7 @@ export function Layout() {
 
       <main className="main">
         <Outlet />
+        <CrisisDisclaimerModal />
       </main>
     </div>
   )

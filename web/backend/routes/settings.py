@@ -20,6 +20,7 @@ router = APIRouter(tags=["settings"])
 class SettingsPatch(BaseModel):
     timezone: str | None = None
     transcript_enabled: bool | None = None
+    crisis_disclaimer_acknowledged_at: str | None = None
 
 
 def _user_metadata(user_id: str) -> dict[str, Any]:
@@ -38,6 +39,9 @@ def get_settings(
     return {
         "timezone": meta.get("timezone"),
         "transcript_enabled": meta.get("transcript_enabled", True),
+        "crisis_disclaimer_acknowledged_at": meta.get(
+            "crisis_disclaimer_acknowledged_at"
+        ),
     }
 
 
@@ -51,12 +55,19 @@ def update_settings(
         current["timezone"] = patch.timezone
     if patch.transcript_enabled is not None:
         current["transcript_enabled"] = patch.transcript_enabled
+    if patch.crisis_disclaimer_acknowledged_at is not None:
+        current["crisis_disclaimer_acknowledged_at"] = (
+            patch.crisis_disclaimer_acknowledged_at
+        )
     db.service_client().auth.admin.update_user_by_id(
         user["user_id"], {"user_metadata": current}
     )
     return {
         "timezone": current.get("timezone"),
         "transcript_enabled": current.get("transcript_enabled", True),
+        "crisis_disclaimer_acknowledged_at": current.get(
+            "crisis_disclaimer_acknowledged_at"
+        ),
     }
 
 

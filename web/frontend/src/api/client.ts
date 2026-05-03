@@ -94,6 +94,7 @@ export type SearchHit = {
 export type UserSettings = {
   timezone: string | null
   transcript_enabled: boolean
+  crisis_disclaimer_acknowledged_at: string | null
 }
 
 export type ConnectorToken = {
