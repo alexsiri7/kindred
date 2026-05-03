@@ -29,6 +29,7 @@ async def test_lookup_connector_token_rpc_none_propagates(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Anon RPC returning NULL → verifier returns None (no exception)."""
+    anon_calls = 0
 
     class _RpcResp:
         data = None
@@ -41,8 +42,15 @@ async def test_lookup_connector_token_rpc_none_propagates(
         def rpc(self, _name: str, _params: dict[str, Any]) -> _RpcChain:
             return _RpcChain()
 
-    monkeypatch.setattr(db, "anon_client", lambda: _Client())
+    def _build_anon() -> _Client:
+        nonlocal anon_calls
+        anon_calls += 1
+        return _Client()
+
+    monkeypatch.setattr(db, "anon_client", _build_anon)
     assert db.lookup_connector_token("missing") is None
+    # lookup_connector_token must use anon_client (not user_client / service role).
+    assert anon_calls == 1
     verifier = ConnectorTokenVerifier()
     assert await verifier.verify_token("missing") is None
 

@@ -33,6 +33,22 @@ def test_user_client_jwt_signed_with_supabase_jwt_secret(
     assert payload["sub"] == USER_ID
 
 
+def test_user_client_jwt_carries_distinct_sub_per_user(
+    _supabase_jwt_secret: None,
+) -> None:
+    # Guards against caching/closure regressions that would let one user's
+    # request read with another user's RLS context (auth.uid() = JWT.sub).
+    user_a = "aaaaaaaa-1111-2222-3333-444444444444"
+    user_b = "bbbbbbbb-1111-2222-3333-444444444444"
+    token_a = db._supabase_user_jwt(user_a)
+    token_b = db._supabase_user_jwt(user_b)
+    payload_a = jwt.decode(token_a, JWT_SECRET, algorithms=["HS256"], audience="authenticated")
+    payload_b = jwt.decode(token_b, JWT_SECRET, algorithms=["HS256"], audience="authenticated")
+    assert payload_a["sub"] == user_a
+    assert payload_b["sub"] == user_b
+    assert payload_a["sub"] != payload_b["sub"]
+
+
 def test_user_client_jwt_role_and_aud_are_authenticated(
     _supabase_jwt_secret: None,
 ) -> None:
