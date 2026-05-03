@@ -32,10 +32,11 @@ describe('Connect', () => {
     vi.useRealTimers()
   })
 
-  it('renders all three client tabs', () => {
+  it('renders all four client tabs', () => {
     renderConnect()
     expect(screen.getByRole('tab', { name: /claude desktop/i })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: /cursor/i })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /chatgpt/i })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: /windsurf/i })).toBeInTheDocument()
   })
 
