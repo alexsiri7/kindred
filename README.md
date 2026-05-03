@@ -43,3 +43,12 @@ See [docs/setup.md](docs/setup.md) for client-specific setup (Claude Projects, C
 ```bash
 ./scripts/gates.sh   # run lint + typecheck + test across all three trees
 ```
+
+## GitHub Actions secrets
+
+Two secrets must be added in the repo's **Settings → Secrets and variables → Actions** for the migration workflow to run on every push to `main`:
+
+| Secret | Description |
+|---|---|
+| `SUPABASE_ACCESS_TOKEN` | Supabase personal access token (create at https://supabase.com/dashboard/account/tokens) |
+| `SUPABASE_DB_PASSWORD` | Production database password for your Supabase project |
