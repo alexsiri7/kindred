@@ -2,8 +2,10 @@
 @import "tailwindcss";
 
 /* ============================================================
-   InterstellarAI — colors_and_type.css
-   Core design tokens: color, type, spacing, radius, shadow.
+   Kindred design tokens — per issue #21
+   Color, type, spacing, radius, shadow, motion.
+   Brand uses periwinkle (not the default terracotta from the
+   upstream colors_and_type.css source).
    ============================================================ */
 
 :root {
@@ -16,18 +18,18 @@
   --ink-3:        #8B7355;   /* tertiary, warm gray-brown */
   --ink-4:        #B8AD9A;   /* quaternary, muted */
 
-  /* -------- BRAND ACCENTS -------- */
-  --terracotta:   #D97757;   /* primary brand accent, CTA */
-  --terracotta-2: #C15D3D;   /* pressed / deeper */
-  --terracotta-3: #F2C7B5;   /* tint, highlight backgrounds */
-  --slate:        #2B3A67;   /* deep blue-black, ink alt */
-  --slate-2:      #4A5B8C;   /* secondary slate */
+  /* -------- BRAND ACCENTS (periwinkle override per issue #21) -------- */
+  --terracotta:   #7C7AB5;   /* primary brand accent (periwinkle), CTA */
+  --terracotta-2: #5F5D96;   /* pressed / deeper periwinkle */
+  --terracotta-3: #DEDCEF;   /* periwinkle tint, highlight backgrounds */
+  --slate:        #4A3D5C;   /* deep mauve, default link color */
+  --slate-2:      #6B5C7E;   /* secondary mauve (extends issue #21 to keep app-shell visuals stable) */
   --dusk:         #7A8B99;   /* cool gray for UI chrome */
 
-  /* -------- ACCENTS (used sparingly) -------- */
-  --marigold:     #E8A33D;   /* highlight, "new" badges */
-  --moss:         #6B8E5A;   /* success, positive */
-  --rust:         #B04A2F;   /* error, destructive */
+  /* -------- ACCENTS (used sparingly; harmonised with periwinkle per PR #33) -------- */
+  --marigold:     #D4A574;   /* highlight, "new" badges (warmer, harmonised) */
+  --moss:         #8DA88A;   /* success, positive (sage, harmonised) */
+  --rust:         #B04A2F;   /* error, destructive (kept) */
 
   /* -------- SEMANTIC -------- */
   --bg:           var(--paper);
@@ -158,23 +160,6 @@ hr { border: 0; border-top: 1px solid var(--border); margin: var(--sp-6) 0; }
 
 /* Selection */
 ::selection { background: var(--terracotta-3); color: var(--ink); }
-
-/* ============================================================
-   app.css — App shell + all page component styles
-   ============================================================ */
-
-/* Inherit the recolored palette */
-:root {
-  --terracotta:    #7C7AB5;
-  --terracotta-2:  #5F5D96;
-  --terracotta-3:  #DEDCEF;
-  --slate:         #4A3D5C;
-  --slate-2:       #6B5C7E;
-  --moss:          #8DA88A;
-  --marigold:      #D4A574;
-  --accent:        var(--terracotta);
-  --link:          var(--slate);
-}
 
 * { box-sizing: border-box; }
 html, body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--font-body); -webkit-font-smoothing: antialiased; }
@@ -664,7 +649,7 @@ section { padding: var(--sp-9) var(--sp-6); }
   padding: var(--sp-6) var(--sp-6) var(--sp-4);
   display: flex; flex-direction: column; gap: var(--sp-5);
   background:
-    radial-gradient(ellipse at 50% 0%, rgba(217,119,87,0.04), transparent 60%),
+    radial-gradient(ellipse at 50% 0%, rgba(124,122,181,0.04), transparent 60%),
     var(--bg-elevated);
   scroll-behavior: smooth;
 }
