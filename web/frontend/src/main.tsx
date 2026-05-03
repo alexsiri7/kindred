@@ -14,6 +14,7 @@ if (import.meta.env.VITE_SENTRY_DSN) {
   })
 }
 import { Layout } from './components/Layout'
+import { Landing } from './pages/Landing'
 import { Login } from './pages/Login'
 import { Home } from './pages/Home'
 import { EntryDetail } from './pages/EntryDetail'
@@ -25,18 +26,22 @@ import { Connect } from './pages/Connect'
 import { McpAuth } from './pages/McpAuth'
 
 const router = createBrowserRouter([
+  // Public routes
+  { path: '/', element: <Landing /> },
+  { path: '/login', element: <Login /> },
   { path: '/mcp-auth', element: <McpAuth /> },
+  // Authenticated app routes
   {
+    path: '/app',
     element: <Layout />,
     children: [
-      { path: '/', element: <Home /> },
-      { path: '/login', element: <Login /> },
-      { path: '/entries/:id', element: <EntryDetail /> },
-      { path: '/patterns', element: <Patterns /> },
-      { path: '/patterns/:id', element: <PatternDetail /> },
-      { path: '/search', element: <Search /> },
-      { path: '/settings', element: <Settings /> },
-      { path: '/connect', element: <Connect /> },
+      { index: true, element: <Home /> },
+      { path: 'entries/:id', element: <EntryDetail /> },
+      { path: 'patterns', element: <Patterns /> },
+      { path: 'patterns/:id', element: <PatternDetail /> },
+      { path: 'search', element: <Search /> },
+      { path: 'settings', element: <Settings /> },
+      { path: 'connect', element: <Connect /> },
     ],
   },
 ])

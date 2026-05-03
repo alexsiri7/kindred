@@ -1,31 +1,89 @@
 import { Navigate } from 'react-router'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../store/auth'
+import { KindredMark } from '../components/Brand'
 
 export function Login() {
   const session = useAuth((s) => s.session)
-  if (session) return <Navigate to="/" replace />
+  if (session) return <Navigate to="/app" replace />
 
   const signIn = () => {
     void supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: window.location.origin + '/' },
+      options: { redirectTo: window.location.origin + '/app' },
     })
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-stone-50">
-      <div className="w-full max-w-sm space-y-6 rounded-lg border border-stone-200 bg-white p-8 text-center shadow-sm">
-        <div>
-          <h1 className="text-2xl font-semibold">Kindred</h1>
-          <p className="mt-2 text-sm text-stone-600">
-            A reflective journaling companion.
-          </p>
+    <div
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'var(--paper)',
+      }}
+    >
+      <div
+        style={{
+          width: '100%',
+          maxWidth: 380,
+          background: 'var(--bg-elevated)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--r-xl)',
+          padding: 'var(--sp-7)',
+          boxShadow: 'var(--shadow-md)',
+          textAlign: 'center',
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 10,
+            marginBottom: 'var(--sp-6)',
+          }}
+        >
+          <KindredMark size={36} />
+          <span
+            style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: 28,
+              lineHeight: 1,
+              letterSpacing: '-0.01em',
+            }}
+          >
+            <em>Kindred</em>
+            <span style={{ color: 'var(--terracotta)' }}>.</span>
+          </span>
         </div>
+
+        <h1
+          style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: 'var(--fs-h3)',
+            fontWeight: 400,
+            margin: '0 0 var(--sp-2)',
+          }}
+        >
+          Sign in to your <em>journal</em>
+        </h1>
+        <p
+          style={{
+            color: 'var(--ink-3)',
+            fontSize: 'var(--fs-sm)',
+            marginBottom: 'var(--sp-6)',
+          }}
+        >
+          A reflective journaling companion.
+        </p>
+
         <button
           type="button"
+          className="btn btn-primary btn-lg"
           onClick={signIn}
-          className="w-full rounded bg-stone-900 px-4 py-2 text-white hover:bg-stone-800"
+          style={{ width: '100%', justifyContent: 'center' }}
         >
           Sign in with Google
         </button>

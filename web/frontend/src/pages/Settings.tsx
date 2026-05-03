@@ -1,6 +1,63 @@
 import { useEffect, useState } from 'react'
 import { api, type UserSettings } from '../api/client'
 
+function Toggle({
+  on,
+  onChange,
+  label,
+}: {
+  on: boolean
+  onChange: (val: boolean) => void
+  label: string
+}) {
+  return (
+    <label className={`toggle ${on ? 'on' : ''}`} onClick={() => onChange(!on)}>
+      <span className="toggle-track">
+        <span className="toggle-thumb" />
+      </span>
+      <span className="toggle-label">{label}</span>
+    </label>
+  )
+}
+
+function DownloadIcon() {
+  return (
+    <svg
+      width={14}
+      height={14}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <path d="M7 10l5 5 5-5" />
+      <path d="M12 15V3" />
+    </svg>
+  )
+}
+
+function TrashIcon() {
+  return (
+    <svg
+      width={14}
+      height={14}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M3 6h18" />
+      <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+    </svg>
+  )
+}
+
 export function Settings() {
   const [settings, setSettings] = useState<UserSettings | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -49,56 +106,103 @@ export function Settings() {
     window.location.href = '/login'
   }
 
-  if (error) return <p className="text-red-700">{error}</p>
-  if (!settings) return <p className="text-stone-500">Loading…</p>
+  if (error) return <p style={{ color: 'var(--rust)' }}>{error}</p>
+  if (!settings) return <p style={{ color: 'var(--ink-3)' }}>Loading…</p>
 
   return (
-    <div className="space-y-8">
-      <h1 className="text-2xl font-semibold">Settings</h1>
+    <>
+      <div className="page-head">
+        <div className="page-eye">
+          <span className="glyph">◈</span> Settings
+        </div>
+        <h1 className="page-title">
+          Your <em>data</em>, your terms.
+        </h1>
+        <p className="page-sub">A few small toggles. Nothing else hidden behind submenus.</p>
+      </div>
 
-      <section className="space-y-3 rounded border border-stone-200 bg-white p-4">
-        <label className="block text-sm">
-          Timezone
+      <div className="set-section">
+        <div>
+          <div className="set-label">Timezone</div>
+          <p className="set-help">Used for the &quot;user-local date&quot; of each entry.</p>
+        </div>
+        <div className="set-control">
           <input
             type="text"
             value={settings.timezone ?? ''}
             onChange={(e) => setSettings({ ...settings, timezone: e.target.value })}
             onBlur={(e) => void save({ timezone: e.target.value })}
             placeholder="America/New_York"
-            className="mt-1 block w-full rounded border border-stone-300 px-3 py-2"
           />
-        </label>
+          {saving && (
+            <span
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 11,
+                color: 'var(--ink-3)',
+              }}
+            >
+              Saving…
+            </span>
+          )}
+        </div>
+      </div>
 
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={settings.transcript_enabled}
-            onChange={(e) =>
-              void save({ transcript_enabled: e.target.checked })
+      <div className="set-section">
+        <div>
+          <div className="set-label">Save transcripts</div>
+          <p className="set-help">
+            Stores the full conversation alongside the summary.
+          </p>
+        </div>
+        <div className="set-control">
+          <Toggle
+            on={settings.transcript_enabled}
+            onChange={(val) => void save({ transcript_enabled: val })}
+            label={
+              settings.transcript_enabled
+                ? 'On — summary + transcript'
+                : 'Off — summary only'
             }
           />
-          Save full transcript with each entry
-        </label>
-        {saving && <p className="text-xs text-stone-500">Saving…</p>}
-      </section>
+        </div>
+      </div>
 
-      <section className="space-y-3 rounded border border-stone-200 bg-white p-4">
-        <h2 className="font-semibold">Your data</h2>
-        <button
-          type="button"
-          onClick={() => void exportData()}
-          className="rounded bg-stone-900 px-4 py-2 text-white hover:bg-stone-800"
-        >
-          Export all data
-        </button>
-        <button
-          type="button"
-          onClick={() => void deleteAccount()}
-          className="ml-3 rounded border border-red-700 px-4 py-2 text-red-700 hover:bg-red-50"
-        >
-          Delete account
-        </button>
-      </section>
-    </div>
+      <div className="set-section">
+        <div>
+          <div className="set-label">Export everything</div>
+          <p className="set-help">
+            A JSON dump of every entry, pattern, and occurrence. Yours to take.
+          </p>
+        </div>
+        <div className="set-control">
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => void exportData()}
+          >
+            <DownloadIcon /> Export as JSON
+          </button>
+        </div>
+      </div>
+
+      <div className="set-section">
+        <div>
+          <div className="set-label">Delete account</div>
+          <p className="set-help">
+            Hard delete, cascading across all tables.
+          </p>
+        </div>
+        <div className="set-control">
+          <button
+            type="button"
+            className="btn btn-danger"
+            onClick={() => void deleteAccount()}
+          >
+            <TrashIcon /> Delete everything
+          </button>
+        </div>
+      </div>
+    </>
   )
 }

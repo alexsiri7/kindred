@@ -1,42 +1,166 @@
-import { Link, Navigate, Outlet, useLocation } from 'react-router'
+import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router'
 import { useAuth } from '../store/auth'
 import { supabase } from '../lib/supabase'
+import { KindredMark } from './Brand'
+
+type IconName = 'book' | 'layers' | 'search' | 'settings' | 'plug'
+
+function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
+  const paths: Record<IconName, React.ReactNode> = {
+    book: (
+      <>
+        <path d="M4 4v16a2 2 0 0 0 2 2h14" />
+        <path d="M4 4h14v18" />
+        <path d="M8 8h6M8 12h6M8 16h4" />
+      </>
+    ),
+    layers: (
+      <>
+        <path d="M12 2L2 8l10 6 10-6-10-6z" />
+        <path d="M2 14l10 6 10-6" />
+      </>
+    ),
+    search: (
+      <>
+        <circle cx="11" cy="11" r="7" />
+        <path d="M21 21l-5-5" />
+      </>
+    ),
+    settings: (
+      <>
+        <circle cx="12" cy="12" r="3" />
+        <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h.1a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" />
+      </>
+    ),
+    plug: (
+      <>
+        <path d="M9 2v6" />
+        <path d="M15 2v6" />
+        <path d="M5 8h14v3a7 7 0 0 1-14 0z" />
+        <path d="M12 18v4" />
+      </>
+    ),
+  }
+  return (
+    <svg
+      className="ico"
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      {paths[name]}
+    </svg>
+  )
+}
 
 export function Layout() {
   const session = useAuth((s) => s.session)
   const location = useLocation()
+  const navigate = useNavigate()
 
-  if (!session && location.pathname !== '/login') {
+  if (!session) {
     return <Navigate to="/login" replace />
   }
 
-  if (location.pathname === '/login') {
-    return <Outlet />
+  const email = session?.user?.email ?? ''
+  const name = email.split('@')[0] ?? 'User'
+  const initial = (name[0] ?? '?').toUpperCase()
+
+  const isActive = (path: string) => {
+    if (path === '/app') return location.pathname === '/app'
+    return location.pathname.startsWith(path)
   }
 
+  const libraryItems: { path: string; label: string; icon: IconName }[] = [
+    { path: '/app', label: 'Entries', icon: 'book' },
+    { path: '/app/patterns', label: 'Patterns', icon: 'layers' },
+    { path: '/app/search', label: 'Search', icon: 'search' },
+  ]
+
+  const accountItems: { path: string; label: string; icon: IconName }[] = [
+    { path: '/app/connect', label: 'Connect to Claude', icon: 'plug' },
+    { path: '/app/settings', label: 'Settings', icon: 'settings' },
+  ]
+
   return (
-    <div className="min-h-screen bg-stone-50 text-stone-900">
-      <nav className="border-b border-stone-200 bg-white">
-        <div className="mx-auto flex max-w-3xl items-center gap-6 px-6 py-4 text-sm">
-          <Link to="/" className="font-semibold">
-            Kindred
-          </Link>
-          <Link to="/patterns">Patterns</Link>
-          <Link to="/search">Search</Link>
-          <Link to="/connect">Connect</Link>
-          <Link to="/settings" className="ml-auto">
-            Settings
-          </Link>
+    <div className="app">
+      <aside className="side">
+        <Link to="/app" className="side-brand">
+          <KindredMark size={26} />
+          <span className="wm">
+            <em>Kindred</em>
+            <span className="dot">.</span>
+          </span>
+        </Link>
+
+        <div className="side-search" onClick={() => void navigate('/app/search')} style={{ cursor: 'pointer' }}>
+          <Icon name="search" size={14} />
+          <input placeholder="Search by feeling, theme…" readOnly />
+          <span className="kbd">⌘K</span>
+        </div>
+
+        <div className="side-eye">Library</div>
+        <nav className="side-nav">
+          {libraryItems.map((item) => (
+            <Link
+              key={item.path}
+              to={item.path}
+              className={`side-link ${isActive(item.path) ? 'is-active' : ''}`}
+            >
+              <Icon name={item.icon} />
+              <span>{item.label}</span>
+            </Link>
+          ))}
+        </nav>
+
+        <div className="side-eye">Account</div>
+        <nav className="side-nav">
+          {accountItems.map((item) => (
+            <Link
+              key={item.path}
+              to={item.path}
+              className={`side-link ${isActive(item.path) ? 'is-active' : ''}`}
+            >
+              <Icon name={item.icon} />
+              <span>{item.label}</span>
+            </Link>
+          ))}
+        </nav>
+
+        <div className="side-foot">
+          <div className="side-avatar">{initial}</div>
+          <div className="who">
+            {name}
+            <small>{email}</small>
+          </div>
           <button
             type="button"
             onClick={() => void supabase.auth.signOut()}
-            className="text-stone-500 hover:text-stone-900"
+            style={{
+              marginLeft: 'auto',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              fontFamily: 'var(--font-mono)',
+              fontSize: '10px',
+              color: 'var(--ink-3)',
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              padding: '4px',
+            }}
+            title="Sign out"
           >
-            Sign out
+            ↩
           </button>
         </div>
-      </nav>
-      <main className="mx-auto max-w-3xl px-6 py-8">
+      </aside>
+
+      <main className="main">
         <Outlet />
       </main>
     </div>

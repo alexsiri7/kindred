@@ -16,43 +16,155 @@ export function Connect() {
     }
   }
 
-  const copy = async () => {
-    if (!token) return
-    await navigator.clipboard.writeText(token.token)
+  const copy = async (text: string) => {
+    await navigator.clipboard.writeText(text)
     setCopied(true)
     setTimeout(() => setCopied(false), 1500)
   }
 
+  const MCP_URL = import.meta.env.VITE_MCP_BASE_URL
+    ? `${import.meta.env.VITE_MCP_BASE_URL}/sse`
+    : 'https://kindred-mcp.interstellarai.net/sse'
+
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Connect to Claude.ai</h1>
-      <p className="text-sm text-stone-700">
-        Mint a connector token below and paste it into the Kindred connector
-        config in Claude.ai. Existing tokens stay valid.
-      </p>
-      <button
-        type="button"
-        onClick={() => void mint()}
-        className="rounded bg-stone-900 px-4 py-2 text-white hover:bg-stone-800"
+    <>
+      <div className="page-head">
+        <div className="page-eye">
+          <span className="glyph">◈</span> Connector
+        </div>
+        <h1 className="page-title">
+          Add Kindred to <em>Claude</em>.
+        </h1>
+        <p className="page-sub">
+          Two minutes. Paste this into Claude.ai&apos;s connector settings. Once connected, the
+          three slash commands light up.
+        </p>
+      </div>
+
+      <div
+        style={{
+          background: 'var(--bg-elevated)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--r-lg)',
+          padding: 'var(--sp-5)',
+          marginBottom: 'var(--sp-5)',
+        }}
       >
-        Mint new token
-      </button>
-      {error && <p className="text-red-700">{error}</p>}
-      {token && (
-        <div className="rounded border border-stone-200 bg-white p-4">
-          <div className="text-xs text-stone-500">Your new token:</div>
-          <code className="mt-2 block break-all rounded bg-stone-100 p-3 text-sm">
-            {token.token}
+        {/* Step 1 */}
+        <div className="entry-section-eye">Step 1 · MCP server URL</div>
+        <div
+          style={{
+            display: 'flex',
+            gap: 8,
+            alignItems: 'center',
+            marginBottom: 'var(--sp-4)',
+          }}
+        >
+          <code
+            style={{
+              flex: 1,
+              padding: '12px 14px',
+              background: 'var(--paper-2)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--r-md)',
+              fontFamily: 'var(--font-mono)',
+              fontSize: 13,
+              color: 'var(--ink)',
+              wordBreak: 'break-all',
+            }}
+          >
+            {MCP_URL}
           </code>
           <button
             type="button"
-            onClick={() => void copy()}
-            className="mt-3 rounded border border-stone-300 px-3 py-1 text-sm hover:bg-stone-100"
+            className="btn btn-secondary"
+            onClick={() => void copy(MCP_URL)}
           >
-            {copied ? 'Copied' : 'Copy'}
+            Copy
           </button>
         </div>
-      )}
-    </div>
+
+        {/* Step 2 */}
+        <div className="entry-section-eye">Step 2 · Connector token</div>
+        <div
+          style={{
+            display: 'flex',
+            gap: 8,
+            alignItems: 'center',
+            marginBottom: 'var(--sp-4)',
+          }}
+        >
+          {token ? (
+            <code
+              style={{
+                flex: 1,
+                padding: '12px 14px',
+                background: 'var(--paper-2)',
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--r-md)',
+                fontFamily: 'var(--font-mono)',
+                fontSize: 13,
+                color: 'var(--ink)',
+                wordBreak: 'break-all',
+              }}
+            >
+              {token.token}
+            </code>
+          ) : (
+            <code
+              style={{
+                flex: 1,
+                padding: '12px 14px',
+                background: 'var(--paper-2)',
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--r-md)',
+                fontFamily: 'var(--font-mono)',
+                fontSize: 13,
+                color: 'var(--ink-3)',
+              }}
+            >
+              kdr_••••••••••••••••••••••••
+            </code>
+          )}
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => void mint()}
+          >
+            {token ? 'Rotate' : 'Mint token'}
+          </button>
+          {token && (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => void copy(token.token)}
+            >
+              {copied ? 'Copied' : 'Copy'}
+            </button>
+          )}
+        </div>
+
+        {error && (
+          <p style={{ color: 'var(--rust)', fontSize: 13, margin: '0 0 var(--sp-3)' }}>
+            {error}
+          </p>
+        )}
+
+        {/* Step 3 */}
+        <div className="entry-section-eye">Step 3 · Try it</div>
+        <p
+          style={{
+            color: 'var(--ink-2)',
+            fontSize: 14,
+            lineHeight: 1.55,
+            margin: '8px 0 0',
+            maxWidth: '56ch',
+          }}
+        >
+          In Claude.ai, type{' '}
+          <code>/kindred-start</code> to begin a session. That&apos;s it.
+        </p>
+      </div>
+    </>
   )
 }

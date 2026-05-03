@@ -11,14 +11,14 @@ vi.mock('../../api/client', () => ({
 import { Home } from '../Home'
 
 describe('Home', () => {
-  it('renders the recent-entries heading', async () => {
+  it('renders the journal library heading', async () => {
     render(
       <MemoryRouter>
         <Home />
       </MemoryRouter>,
     )
     expect(
-      screen.getByRole('heading', { name: /recent/i }),
+      screen.getByRole('heading', { name: /library/i }),
     ).toBeInTheDocument()
     await waitFor(() =>
       expect(screen.getByText(/no entries yet/i)).toBeInTheDocument(),
