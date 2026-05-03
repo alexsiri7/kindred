@@ -21,8 +21,17 @@ supabase.auth.onAuthStateChange((_event, session) => {
   setInitialized(true)
 })
 
-void supabase.auth.getSession().then(({ data }) => {
-  const { setSession, setInitialized } = useAuth.getState()
-  setSession(data.session)
-  setInitialized(true)
-})
+void supabase.auth
+  .getSession()
+  .then(({ data }) => {
+    const { setSession, setInitialized } = useAuth.getState()
+    setSession(data.session)
+    setInitialized(true)
+  })
+  .catch((err: unknown) => {
+    console.error('[auth] getSession() failed', err)
+    // Unblock Layout's gate so the user lands on /login instead of a blank page.
+    const { setSession, setInitialized } = useAuth.getState()
+    setSession(null)
+    setInitialized(true)
+  })

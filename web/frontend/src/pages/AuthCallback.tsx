@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Navigate } from 'react-router'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../store/auth'
 
 type Status = 'exchanging' | 'success' | 'error'
 
@@ -30,14 +31,25 @@ export function AuthCallback() {
       return
     }
 
-    void supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
-      if (error) {
-        setStatus('error')
-        setErrorMsg(error.message)
-      } else {
+    void (async () => {
+      try {
+        const { data, error } = await supabase.auth.exchangeCodeForSession(code)
+        if (error) {
+          console.error('[auth-callback] exchangeCodeForSession returned error', error)
+          setStatus('error')
+          setErrorMsg(error.message)
+          return
+        }
+        // Make Layout's gate deterministic: write the session before navigating
+        // so we don't depend on onAuthStateChange / React update ordering.
+        useAuth.getState().setSession(data.session)
         setStatus('success')
+      } catch (err) {
+        console.error('[auth-callback] exchangeCodeForSession threw', err)
+        setStatus('error')
+        setErrorMsg(err instanceof Error ? err.message : String(err))
       }
-    })
+    })()
   }, [])
 
   if (status === 'success') return <Navigate to="/app" replace />

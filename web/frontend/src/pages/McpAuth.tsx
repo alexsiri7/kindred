@@ -53,6 +53,7 @@ export function McpAuth() {
         setStatus('done')
         window.location.href = redirect_url
       } catch (err) {
+        console.error('[mcp-auth] completeFlow failed', err)
         setStatus('error')
         setErrorMsg(String(err))
       }
@@ -67,12 +68,35 @@ export function McpAuth() {
       }
     })
 
-    void supabase.auth.getSession().then(({ data }) => {
-      if (data.session) {
-        subscription.unsubscribe()
-        void completeFlow(data.session.access_token)
-      }
-    })
+    // detectSessionInUrl is off, so PKCE codes returned by Google land here
+    // unconsumed — we own the exchange ourselves. Mirrors AuthCallback.tsx.
+    const code = params.get('code')
+    if (code) {
+      void (async () => {
+        try {
+          const { error } = await supabase.auth.exchangeCodeForSession(code)
+          if (error) {
+            subscription.unsubscribe()
+            setStatus('error')
+            setErrorMsg(error.message)
+            return
+          }
+          // onAuthStateChange will fire with the new session and trigger completeFlow.
+        } catch (err) {
+          console.error('[mcp-auth] exchangeCodeForSession threw', err)
+          subscription.unsubscribe()
+          setStatus('error')
+          setErrorMsg(err instanceof Error ? err.message : String(err))
+        }
+      })()
+    } else {
+      void supabase.auth.getSession().then(({ data }) => {
+        if (data.session) {
+          subscription.unsubscribe()
+          void completeFlow(data.session.access_token)
+        }
+      })
+    }
 
     return () => subscription.unsubscribe()
   }, [])

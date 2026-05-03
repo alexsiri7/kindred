@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Navigate, useSearchParams } from 'react-router'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../store/auth'
@@ -7,14 +8,27 @@ import { Button } from '../components/Button'
 export function Login() {
   const session = useAuth((s) => s.session)
   const [searchParams] = useSearchParams()
-  const errorMsg = searchParams.get('error')
+  const [signInError, setSignInError] = useState<string | null>(null)
+  const errorMsg = signInError ?? searchParams.get('error')
   if (session) return <Navigate to="/app" replace />
 
   const signIn = () => {
-    void supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: window.location.origin + '/auth/callback' },
-    })
+    setSignInError(null)
+    void (async () => {
+      try {
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: { redirectTo: window.location.origin + '/auth/callback' },
+        })
+        if (error) {
+          console.error('[login] signInWithOAuth returned error', error)
+          setSignInError(error.message)
+        }
+      } catch (err) {
+        console.error('[login] signInWithOAuth threw', err)
+        setSignInError(err instanceof Error ? err.message : String(err))
+      }
+    })()
   }
 
   return (

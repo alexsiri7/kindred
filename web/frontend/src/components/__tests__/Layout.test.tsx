@@ -142,7 +142,8 @@ describe('Layout — auth gate', () => {
     authState.session = null
     authState.initialized = false
     try {
-      renderGate()
+      const { container } = renderGate()
+      expect(container).toBeEmptyDOMElement()
       expect(screen.queryByText('LOGIN_ROUTE')).not.toBeInTheDocument()
     } finally {
       authState.session = { user: { email: 'tester@example.com' } }
