@@ -1,10 +1,11 @@
+import { useMemo } from 'react'
 import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router'
 import { useAuth } from '../store/auth'
 import { supabase } from '../lib/supabase'
 import { KindredMark } from './Brand'
 import { CrisisDisclaimerModal } from './CrisisDisclaimerModal'
 
-type IconName = 'book' | 'layers' | 'search' | 'settings' | 'plug'
+type IconName = 'book' | 'layers' | 'search' | 'settings' | 'plug' | 'flag'
 
 function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
   const paths: Record<IconName, React.ReactNode> = {
@@ -41,6 +42,12 @@ function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
         <path d="M12 18v4" />
       </>
     ),
+    flag: (
+      <>
+        <path d="M4 22V4" />
+        <path d="M4 4h13l-2 4 2 4H4" />
+      </>
+    ),
   }
   return (
     <svg
@@ -59,10 +66,38 @@ function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
   )
 }
 
+const GITHUB_ISSUE_URL_BASE = 'https://github.com/alexsiri7/kindred/issues/new'
+
+function buildGitHubIssueUrl(pagePath: string): string {
+  const url = new URL(GITHUB_ISSUE_URL_BASE)
+  url.searchParams.set('template', 'bug_report.md')
+  // Keep body well under ~8 KB — GitHub returns HTTP 414 above that
+  // (github/docs#5136). Do NOT add console logs, redux state, or screenshots.
+  // Pathname only — query strings / fragments may carry per-user search terms
+  // or future tokens and would leak into a public issue.
+  url.searchParams.set(
+    'body',
+    [
+      '## What happened',
+      '',
+      '<!-- Describe the bug -->',
+      '',
+      '## Context',
+      `- **Page:** ${pagePath}`,
+      `- **Browser:** ${navigator.userAgent}`,
+    ].join('\n'),
+  )
+  return url.toString()
+}
+
 export function Layout() {
   const session = useAuth((s) => s.session)
   const location = useLocation()
   const navigate = useNavigate()
+  const reportIssueUrl = useMemo(
+    () => buildGitHubIssueUrl(location.pathname),
+    [location.pathname],
+  )
 
   if (!session) {
     return <Navigate to="/login" replace />
@@ -131,6 +166,19 @@ export function Layout() {
               <span>{item.label}</span>
             </Link>
           ))}
+        </nav>
+
+        <div className="side-eye">Help</div>
+        <nav className="side-nav">
+          <a
+            href={reportIssueUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="side-link"
+          >
+            <Icon name="flag" />
+            <span>Report an issue</span>
+          </a>
         </nav>
 
         <div className="side-foot">
