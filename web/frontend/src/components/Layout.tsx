@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router'
 import { useAuth } from '../store/auth'
 import { supabase } from '../lib/supabase'
@@ -67,12 +68,13 @@ function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
 
 const GITHUB_ISSUE_URL_BASE = 'https://github.com/alexsiri7/kindred/issues/new'
 
-function buildGitHubIssueUrl(): string {
+function buildGitHubIssueUrl(pagePath: string): string {
   const url = new URL(GITHUB_ISSUE_URL_BASE)
   url.searchParams.set('template', 'bug_report.md')
-  url.searchParams.set('title', 'Bug: ')
   // Keep body well under ~8 KB — GitHub returns HTTP 414 above that
   // (github/docs#5136). Do NOT add console logs, redux state, or screenshots.
+  // Pathname only — query strings / fragments may carry per-user search terms
+  // or future tokens and would leak into a public issue.
   url.searchParams.set(
     'body',
     [
@@ -81,7 +83,7 @@ function buildGitHubIssueUrl(): string {
       '<!-- Describe the bug -->',
       '',
       '## Context',
-      `- **Page:** ${window.location.href}`,
+      `- **Page:** ${pagePath}`,
       `- **Browser:** ${navigator.userAgent}`,
     ].join('\n'),
   )
@@ -92,6 +94,10 @@ export function Layout() {
   const session = useAuth((s) => s.session)
   const location = useLocation()
   const navigate = useNavigate()
+  const reportIssueUrl = useMemo(
+    () => buildGitHubIssueUrl(location.pathname),
+    [location.pathname],
+  )
 
   if (!session) {
     return <Navigate to="/login" replace />
@@ -165,7 +171,7 @@ export function Layout() {
         <div className="side-eye">Help</div>
         <nav className="side-nav">
           <a
-            href={buildGitHubIssueUrl()}
+            href={reportIssueUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="side-link"
