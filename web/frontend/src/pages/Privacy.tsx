@@ -122,7 +122,7 @@ export function Privacy() {
               </li>
               <li>
                 <strong>Connector tokens</strong> — random opaque strings used
-                by the Claude.ai MCP connector to identify your account.
+                by your AI assistant&apos;s MCP connector to identify your account.
               </li>
             </ul>
           </Section>
@@ -174,7 +174,7 @@ export function Privacy() {
             <p>
               <strong>Your chosen AI provider</strong> (e.g. Anthropic Claude,
               OpenAI, etc.) — your conversation is sent to whichever provider
-              you have connected via the Claude.ai connector you set up.
+              you have connected via the MCP connector you set up.
               Kindred does not control that provider&apos;s data retention or
               training behaviour. Review your AI provider&apos;s privacy
               settings directly.

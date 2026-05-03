@@ -28,7 +28,7 @@ function Nav() {
           ? <Link to="/app" className="nav-link">Open app</Link>
           : <Link to="/login" className="nav-link">Sign in</Link>
         }
-        <Link to="/app" className="btn btn-primary btn-sm">Add to Claude</Link>
+        <Link to="/app" className="btn btn-primary btn-sm">Connect your AI</Link>
       </div>
     </nav>
   )
@@ -43,7 +43,7 @@ function Hero() {
       <div className="hero-grid">
         <div className="hero-text">
           <div className="eyebrow">
-            <span className="glyph">✶</span> Reflective journaling, via Claude
+            <span className="glyph">✶</span> Reflective journaling, via your AI assistant
           </div>
           <h1 className="hero-head">
             <span className="ink">A journal that</span>
@@ -51,8 +51,8 @@ function Hero() {
             <em>listens</em> <span className="ink">first.</span>
           </h1>
           <p className="hero-lede">
-            Kindred is reflective journaling through Claude — you talk, it stays with you.
-            Claude is the conversation; Kindred is the memory and the structure.
+            Kindred is reflective journaling through your AI assistant — you talk, it stays with you.
+            Your AI is the conversation; Kindred is the memory and the structure.
             No mood scores, no streaks, no nudges. Just a quiet companion that remembers.
           </p>
           <div className="hero-ctas">
@@ -136,7 +136,7 @@ function HowItWorks() {
             Three small <em>commands</em>. One quiet practice.
           </h2>
           <p className="section-sub">
-            Kindred lives inside Claude as a connector. Add it once, and three slash commands
+            Kindred lives inside your AI assistant as an MCP connector. Add it once, and three slash commands
             appear — one to begin, one to look at a pattern, one to close.
           </p>
         </div>
@@ -151,7 +151,7 @@ function HowItWorks() {
               <em>Begin</em> with a gentle question
             </h3>
             <p>
-              Claude greets you with one open prompt — &ldquo;How are you arriving today?&rdquo; —
+              Your AI greets you with one open prompt — &ldquo;How are you arriving today?&rdquo; —
               and stays in listening mode. No advice, no reframing, no silver linings.
             </p>
             <span className="step-cmd">/kindred-start</span>
@@ -179,7 +179,7 @@ function HowItWorks() {
               <em>Close</em> the session, gently
             </h3>
             <p>
-              Claude offers a one-paragraph summary in your language. You approve it. The entry
+              Your AI offers a one-paragraph summary in your language. You approve it. The entry
               saves. No homework, no streak, no &ldquo;see you tomorrow!&rdquo;.
             </p>
             <span className="step-cmd">/kindred-close</span>
@@ -393,10 +393,10 @@ function Conversation() {
             <span className="glyph">✶</span> A real session, more or less
           </div>
           <h2 className="section-title">
-            It&apos;s Claude. With <em>somewhere</em> for it to land.
+            It&apos;s your AI. With <em>somewhere</em> for it to land.
           </h2>
           <p className="section-sub">
-            You journal by talking to Claude. Kindred adds the parts a journal needs: a place to
+            You journal by talking to your AI assistant. Kindred adds the parts a journal needs: a place to
             keep entries, a way to name recurring patterns, and tools that only run when you ask
             them to.
           </p>
@@ -462,7 +462,7 @@ function Conversation() {
             </div>
             <div className="chrome-title">
               <span className="lock">🔒</span>
-              claude.ai · journal — Thursday, 1:48 PM
+              your-ai · journal — Thursday, 1:48 PM
             </div>
             <div className="chrome-mcp">
               <span className="pulse" />
@@ -705,10 +705,10 @@ function EndCap() {
             Ready when you are
           </div>
           <h2>
-            Talk to Claude. Let <em>Kindred</em> hold the rest.
+            Talk to your AI. Let <em>Kindred</em> hold the rest.
           </h2>
           <p>
-            Add the connector to Claude.ai, sign in with Google, type{' '}
+            Add the connector to your AI assistant, sign in with Google, type{' '}
             <code
               style={{
                 background: 'rgba(250,247,242,0.08)',
@@ -721,11 +721,11 @@ function EndCap() {
             >
               /kindred-start
             </code>
-            . That&apos;s the whole onboarding.
+            {' '}(or paste the one-liner from /connect). That&apos;s the whole onboarding.
           </p>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
             <Link to="/app" className="btn btn-primary btn-lg">
-              Connect to Claude.ai
+              Connect Kindred
             </Link>
             <button
               type="button"

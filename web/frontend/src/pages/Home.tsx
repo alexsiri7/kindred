@@ -53,13 +53,13 @@ export function Home() {
         <span className="lock">🔒</span>
         <span>
           <strong>Read-only.</strong> Entries are written through the journaling conversation in
-          Claude — not from here.
+          your AI assistant — not from here.
         </span>
       </div>
 
       {entries?.length === 0 && (
         <p style={{ color: 'var(--ink-3)' }}>
-          No entries yet. Start a journaling session in Claude.ai.
+          No entries yet. Start a journaling session in your AI assistant.
         </p>
       )}
 

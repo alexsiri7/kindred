@@ -37,7 +37,7 @@ export function Patterns() {
       <div className="readonly-banner">
         <span className="lock">🔒</span>
         <span>
-          <strong>Read-only.</strong> Patterns are named during your journaling sessions in Claude.
+          <strong>Read-only.</strong> Patterns are named during your journaling sessions with your AI assistant.
         </span>
       </div>
 

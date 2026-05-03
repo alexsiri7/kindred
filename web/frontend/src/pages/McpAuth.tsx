@@ -28,7 +28,7 @@ export function McpAuth() {
     const storedFlowId = sessionStorage.getItem('mcp_flow_id')
     if (!storedFlowId) {
       setStatus('error')
-      setErrorMsg('No OAuth session in progress. Please restart the connection from Claude.')
+      setErrorMsg('No OAuth session in progress. Please restart the connection from your MCP client.')
       return
     }
 
@@ -159,7 +159,7 @@ export function McpAuth() {
             margin: '0 0 var(--sp-3)',
           }}
         >
-          {status === 'completing' ? 'Completing authentication…' : 'Connecting to Claude…'}
+          {status === 'completing' ? 'Completing authentication…' : 'Connecting…'}
         </p>
         <div
           style={{

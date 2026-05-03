@@ -2,7 +2,7 @@
 
 PRD step 3 specifies a connector-token fallback while we defer MCP OAuth 2.1
 (PRD step 8). Tokens are minted via the web app's ``POST /connect/token`` route
-and pasted by the user into Claude.ai's connector config.
+and pasted by the user into their MCP client's connector config.
 
 The user_id resolved from the bearer token is published into a
 ``contextvars.ContextVar`` by an ASGI middleware in ``main.py``, so tool bodies
