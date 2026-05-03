@@ -1,5 +1,124 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api, type UserSettings } from '../api/client'
+
+const ALL_TIMEZONES: string[] = Intl.supportedValuesOf('timeZone')
+
+function TimezoneInput({
+  value,
+  onSave,
+}: {
+  value: string
+  onSave: (tz: string) => void
+}) {
+  const [inputVal, setInputVal] = useState(value)
+  const [open, setOpen] = useState(false)
+  const [highlighted, setHighlighted] = useState(0)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  // keep local input in sync when parent value changes (e.g. after auto-detect save)
+  useEffect(() => {
+    setInputVal(value)
+  }, [value])
+
+  const suggestions = inputVal.trim()
+    ? ALL_TIMEZONES.filter((tz) =>
+        tz.toLowerCase().includes(inputVal.toLowerCase()),
+      ).slice(0, 10)
+    : []
+
+  // reset highlighted index whenever the suggestion list changes
+  useEffect(() => {
+    setHighlighted(0)
+  }, [suggestions.length, inputVal])
+
+  const selectTz = (tz: string) => {
+    setInputVal(tz)
+    setOpen(false)
+    onSave(tz)
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!open || suggestions.length === 0) return
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setHighlighted((h) => Math.min(h + 1, suggestions.length - 1))
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setHighlighted((h) => Math.max(h - 1, 0))
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      if (suggestions[highlighted]) selectTz(suggestions[highlighted])
+    } else if (e.key === 'Escape') {
+      setOpen(false)
+    }
+  }
+
+  const showDropdown = open && suggestions.length > 0
+
+  return (
+    <div style={{ position: 'relative', width: 280 }}>
+      <input
+        ref={inputRef}
+        type="text"
+        value={inputVal}
+        placeholder="America/New_York"
+        onChange={(e) => {
+          setInputVal(e.target.value)
+          setOpen(true)
+        }}
+        onFocus={() => setOpen(true)}
+        onBlur={(e) => {
+          setOpen(false)
+          onSave(e.target.value)
+        }}
+        onKeyDown={handleKeyDown}
+        style={{ width: '100%' }}
+      />
+      {showDropdown && (
+        <ul
+          style={{
+            position: 'absolute',
+            top: '100%',
+            left: 0,
+            right: 0,
+            marginTop: 4,
+            padding: '4px 0',
+            listStyle: 'none',
+            background: 'var(--paper-2)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--r-md)',
+            boxShadow: 'var(--shadow-md)',
+            zIndex: 50,
+            overflow: 'hidden',
+          }}
+        >
+          {suggestions.map((tz, i) => (
+            <li
+              key={tz}
+              onMouseDown={(e) => {
+                e.preventDefault() // prevent blur firing first
+                selectTz(tz)
+              }}
+              style={{
+                padding: '8px 12px',
+                fontFamily: 'var(--font-mono)',
+                fontSize: 12,
+                letterSpacing: '0.02em',
+                color: i === highlighted ? 'var(--ink)' : 'var(--ink-3)',
+                background:
+                  i === highlighted ? 'var(--paper-3)' : 'transparent',
+                cursor: 'pointer',
+              }}
+              onMouseEnter={() => setHighlighted(i)}
+            >
+              {tz}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
 
 function Toggle({
   on,
@@ -66,7 +185,19 @@ export function Settings() {
   useEffect(() => {
     api
       .get<UserSettings>('/settings')
-      .then(setSettings)
+      .then((s) => {
+        if (!s.timezone) {
+          const detected = Intl.DateTimeFormat().resolvedOptions().timeZone
+          const next = { ...s, timezone: detected }
+          setSettings(next)
+          void api
+            .patch<UserSettings>('/settings', { timezone: detected })
+            .then(setSettings)
+            .catch((e: Error) => setError(e.message))
+        } else {
+          setSettings(s)
+        }
+      })
       .catch((e: Error) => setError(e.message))
   }, [])
 
@@ -127,12 +258,9 @@ export function Settings() {
           <p className="set-help">Used for the &quot;user-local date&quot; of each entry.</p>
         </div>
         <div className="set-control">
-          <input
-            type="text"
+          <TimezoneInput
             value={settings.timezone ?? ''}
-            onChange={(e) => setSettings({ ...settings, timezone: e.target.value })}
-            onBlur={(e) => void save({ timezone: e.target.value })}
-            placeholder="America/New_York"
+            onSave={(tz) => void save({ timezone: tz })}
           />
           {saving && (
             <span
