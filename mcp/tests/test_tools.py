@@ -131,7 +131,8 @@ async def test_log_occurrence_creates_pattern_when_missing(
     def fake_insert_occ(*args: Any, **kw: Any) -> str:
         return OCCURRENCE_ID
 
-    def fake_update(*args: Any, **kw: Any) -> None:
+    def fake_update(user_id: str, *args: Any, **kw: Any) -> None:
+        assert user_id == USER_ID
         inserted["seen"] = True
 
     monkeypatch.setattr(db, "find_pattern_by_name", fake_find)

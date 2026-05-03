@@ -42,6 +42,38 @@ async def test_valid_token_returns_user() -> None:
 
 
 @pytest.mark.asyncio
+async def test_get_current_user_returns_user_metadata() -> None:
+    """user_metadata is surfaced so settings GET avoids a second admin round-trip."""
+    metadata = {"timezone": "Europe/London", "transcript_enabled": False}
+    mock_resp = _mock_supabase_response(
+        200, {"id": USER_ID, "email": "u@example.com", "user_metadata": metadata}
+    )
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(return_value=mock_resp)
+
+    with patch("auth.httpx.AsyncClient") as mock_cls:
+        mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+        user = await get_current_user(_bearer())
+
+    assert user["user_metadata"] == metadata
+
+
+@pytest.mark.asyncio
+async def test_get_current_user_user_metadata_defaults_to_empty_dict() -> None:
+    mock_resp = _mock_supabase_response(200, {"id": USER_ID, "email": "u@example.com"})
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(return_value=mock_resp)
+
+    with patch("auth.httpx.AsyncClient") as mock_cls:
+        mock_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_cls.return_value.__aexit__ = AsyncMock(return_value=False)
+        user = await get_current_user(_bearer())
+
+    assert user["user_metadata"] == {}
+
+
+@pytest.mark.asyncio
 async def test_invalid_token_rejected() -> None:
     mock_resp = _mock_supabase_response(401, {"message": "Invalid JWT"})
     mock_client = AsyncMock()

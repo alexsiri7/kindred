@@ -26,7 +26,7 @@ def mint_token(
 ) -> dict[str, Any]:
     token = secrets.token_urlsafe(TOKEN_BYTES)
     res = (
-        db.service_client()
+        db.user_client(user["jwt"])
         .table("connector_tokens")
         .insert({"user_id": user["user_id"], "token": token})
         .execute()

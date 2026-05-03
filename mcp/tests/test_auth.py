@@ -25,6 +25,29 @@ async def test_verify_token_unknown_returns_none(monkeypatch: pytest.MonkeyPatch
 
 
 @pytest.mark.asyncio
+async def test_lookup_connector_token_rpc_none_propagates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Anon RPC returning NULL → verifier returns None (no exception)."""
+
+    class _RpcResp:
+        data = None
+
+    class _RpcChain:
+        def execute(self) -> _RpcResp:
+            return _RpcResp()
+
+    class _Client:
+        def rpc(self, _name: str, _params: dict[str, Any]) -> _RpcChain:
+            return _RpcChain()
+
+    monkeypatch.setattr(db, "anon_client", lambda: _Client())
+    assert db.lookup_connector_token("missing") is None
+    verifier = ConnectorTokenVerifier()
+    assert await verifier.verify_token("missing") is None
+
+
+@pytest.mark.asyncio
 async def test_verify_token_known_returns_access_token(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

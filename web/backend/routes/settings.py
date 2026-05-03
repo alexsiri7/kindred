@@ -2,6 +2,9 @@
 
 Settings (timezone, transcript_enabled) live in ``auth.users.user_metadata``
 to avoid a 5th application table for what is, today, two scalar fields.
+GET reads ``user_metadata`` from the auth dependency (already fetched from
+GoTrue); PATCH writes via the self-service ``PUT /auth/v1/user``; DELETE
+calls the ``delete_my_account`` security-definer RPC.
 """
 
 from __future__ import annotations
@@ -23,19 +26,11 @@ class SettingsPatch(BaseModel):
     crisis_disclaimer_acknowledged_at: str | None = None
 
 
-def _user_metadata(user_id: str) -> dict[str, Any]:
-    res = db.service_client().auth.admin.get_user_by_id(user_id)
-    if res is None or res.user is None:
-        return {}
-    meta = getattr(res.user, "user_metadata", None) or {}
-    return cast(dict[str, Any], meta)
-
-
 @router.get("/settings")
 def get_settings(
     user: dict[str, Any] = Depends(get_current_user),
 ) -> dict[str, Any]:
-    meta = _user_metadata(user["user_id"])
+    meta = cast(dict[str, Any], user.get("user_metadata") or {})
     return {
         "timezone": meta.get("timezone"),
         "transcript_enabled": meta.get("transcript_enabled", True),
@@ -46,11 +41,11 @@ def get_settings(
 
 
 @router.patch("/settings")
-def update_settings(
+async def update_settings(
     patch: SettingsPatch,
     user: dict[str, Any] = Depends(get_current_user),
 ) -> dict[str, Any]:
-    current = _user_metadata(user["user_id"])
+    current = dict(cast(dict[str, Any], user.get("user_metadata") or {}))
     if patch.timezone is not None:
         current["timezone"] = patch.timezone
     if patch.transcript_enabled is not None:
@@ -59,13 +54,11 @@ def update_settings(
         current["crisis_disclaimer_acknowledged_at"] = (
             patch.crisis_disclaimer_acknowledged_at
         )
-    db.service_client().auth.admin.update_user_by_id(
-        user["user_id"], {"user_metadata": current}
-    )
+    merged = await db.update_user_metadata(user["jwt"], current)
     return {
-        "timezone": current.get("timezone"),
-        "transcript_enabled": current.get("transcript_enabled", True),
-        "crisis_disclaimer_acknowledged_at": current.get(
+        "timezone": merged.get("timezone"),
+        "transcript_enabled": merged.get("transcript_enabled", True),
+        "crisis_disclaimer_acknowledged_at": merged.get(
             "crisis_disclaimer_acknowledged_at"
         ),
     }
@@ -91,7 +84,7 @@ def export_data(
 def delete_account(
     user: dict[str, Any] = Depends(get_current_user),
 ) -> dict[str, str]:
-    # FK ON DELETE CASCADE on every user-owned table means the auth.users
-    # delete cleans up app data too.
-    db.service_client().auth.admin.delete_user(user["user_id"])
+    # The security-definer RPC deletes auth.users for auth.uid(); FK ON
+    # DELETE CASCADE on every user-owned table cleans up app data atomically.
+    db.user_client(user["jwt"]).rpc("delete_my_account").execute()
     return {"status": "deleted"}
