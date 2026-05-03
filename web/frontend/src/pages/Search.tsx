@@ -95,7 +95,7 @@ export function Search() {
         return (
           <Link
             key={h.entry_id}
-            to={`/entries/${h.entry_id}`}
+            to={`/app/entries/${h.entry_id}`}
             style={{ textDecoration: 'none', color: 'inherit' }}
           >
             <div className="search-result">

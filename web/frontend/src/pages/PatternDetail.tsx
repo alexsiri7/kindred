@@ -90,7 +90,7 @@ export function PatternDetail() {
                     {occDate}
                     {o.intensity != null && ` · intensity ${o.intensity}/5`}
                     {' · '}
-                    <Link to={`/entries/${o.entry_id}`} style={{ color: 'var(--terracotta)' }}>
+                    <Link to={`/app/entries/${o.entry_id}`} style={{ color: 'var(--terracotta)' }}>
                       read entry →
                     </Link>
                   </div>

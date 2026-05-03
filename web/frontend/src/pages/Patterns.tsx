@@ -56,7 +56,7 @@ export function Patterns() {
           return (
             <Link
               key={p.id}
-              to={`/patterns/${p.id}`}
+              to={`/app/patterns/${p.id}`}
               style={{ textDecoration: 'none', color: 'inherit' }}
             >
               <div className="pat-card">
