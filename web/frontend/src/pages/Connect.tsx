@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { api, type ConnectorToken } from '../api/client'
 
-type ClientKey = 'claude-desktop' | 'cursor' | 'windsurf'
+type ClientKey = 'claude-desktop' | 'cursor' | 'chatgpt' | 'windsurf'
 
 type ClientSetup = {
   key: ClientKey
@@ -64,6 +64,35 @@ const CLIENTS: ClientSetup[] = [
       },
     ],
     docsUrl: 'https://cursor.com/docs/mcp',
+  },
+  {
+    key: 'chatgpt',
+    label: 'ChatGPT',
+    addServer:
+      'ChatGPT uses OAuth — no connector token needed; skip Step 2 above. Requires a Plus, Pro, Team, Enterprise, or Edu plan. First enable Developer Mode: Settings → Connectors → Advanced → toggle Developer Mode on (ChatGPT will warn about security implications; confirm). Then add the server: Settings → Connectors → Create. Enter a name (e.g. "Kindred"), paste the MCP server URL below as the Connector URL, set Authentication to "OAuth", check "I trust this application", and click Create. ChatGPT will immediately redirect you to sign in with your Kindred account — create one if you don\'t have one yet. After you approve access, you\'ll return to ChatGPT and the connector will be active.',
+    oneLinerHint: 'In the Custom Instructions for your ChatGPT account (Settings → Personalization → Custom Instructions), paste:',
+    testHint:
+      'Start a new chat and say "Hi, I\'d like to journal." The read_guide tool should be called first, then you\'ll get one gentle open question.',
+    troubleshooting: [
+      {
+        issue: 'Developer Mode not visible',
+        fix: 'Developer Mode requires a Plus, Pro, Team, Enterprise, or Edu plan. On Team/Enterprise, a workspace admin must also enable it under Workspace Settings → Permissions & Roles → Connected Data.',
+      },
+      {
+        issue: 'Infinite OAuth loop',
+        fix: 'Disconnect the Kindred connector in Settings → Connectors, revoke the OAuth token in your Kindred account settings, then reconnect and go through the OAuth flow fresh.',
+      },
+      {
+        issue: 'Tools not invoked (only search/fetch work)',
+        fix: 'Developer Mode must be on. Without it, ChatGPT restricts MCP servers to search and fetch tools only — Kindred\'s journaling tools will be silently blocked.',
+      },
+      {
+        issue: 'Memory is missing in the chat',
+        fix: 'Expected behaviour — ChatGPT automatically disables Memory while a custom MCP connector is active to prevent data leakage.',
+      },
+    ],
+    docsUrl:
+      'https://help.openai.com/en/articles/12584461-developer-mode-apps-and-full-mcp-connectors-in-chatgpt-beta',
   },
   {
     key: 'windsurf',
