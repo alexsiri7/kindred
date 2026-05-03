@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type Session } from '@supabase/supabase-js'
 import { useAuth } from '../store/auth'
 
 const url = import.meta.env.VITE_SUPABASE_URL ?? ''
@@ -15,23 +15,19 @@ export const supabase = createClient(url, anon, {
   },
 })
 
-supabase.auth.onAuthStateChange((_event, session) => {
+function hydrate(session: Session | null) {
   const { setSession, setInitialized } = useAuth.getState()
   setSession(session)
   setInitialized(true)
-})
+}
+
+supabase.auth.onAuthStateChange((_event, session) => hydrate(session))
 
 void supabase.auth
   .getSession()
-  .then(({ data }) => {
-    const { setSession, setInitialized } = useAuth.getState()
-    setSession(data.session)
-    setInitialized(true)
-  })
+  .then(({ data }) => hydrate(data.session))
   .catch((err: unknown) => {
     console.error('[auth] getSession() failed', err)
     // Unblock Layout's gate so the user lands on /login instead of a blank page.
-    const { setSession, setInitialized } = useAuth.getState()
-    setSession(null)
-    setInitialized(true)
+    hydrate(null)
   })
