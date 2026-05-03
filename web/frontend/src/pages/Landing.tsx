@@ -22,6 +22,7 @@ function Nav() {
         <a href="#privacy" className="nav-link">Privacy</a>
       </div>
       <div className="nav-cta">
+        <Link to="/login" className="nav-link">Sign in</Link>
         <Link to="/app" className="btn btn-primary btn-sm">Add to Claude</Link>
       </div>
     </nav>
