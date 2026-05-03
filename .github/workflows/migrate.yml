@@ -5,9 +5,17 @@ on:
     branches: [main]
   workflow_dispatch:
 
+concurrency:
+  group: migrate-prod
+  cancel-in-progress: false
+
 jobs:
   migrate:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
 
@@ -15,11 +23,7 @@ jobs:
         uses: supabase/setup-cli@v1
 
       - name: Link Supabase project
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-        run: supabase link --project-ref goxtnasdisqkfrldtbej --password ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: supabase link --project-ref goxtnasdisqkfrldtbej
 
       - name: Apply migrations
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-        run: supabase db push --linked --password ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: supabase db push --linked

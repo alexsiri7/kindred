@@ -50,5 +50,5 @@ Two secrets must be added in the repo's **Settings → Secrets and variables →
 
 | Secret | Description |
 |---|---|
-| `SUPABASE_ACCESS_TOKEN` | Supabase personal access token (create at https://supabase.com/dashboard/account/tokens) |
+| `SUPABASE_ACCESS_TOKEN` | Supabase personal access token ([create one here](https://supabase.com/dashboard/account/tokens)) |
 | `SUPABASE_DB_PASSWORD` | Production database password for your Supabase project |

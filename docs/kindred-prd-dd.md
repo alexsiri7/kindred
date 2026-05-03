@@ -56,7 +56,7 @@ Two Railway services backed by one Supabase project.
 - **Auth**: Supabase Auth with Google as the OAuth provider (web); MCP OAuth 2.1 flow for the user's AI client (e.g. Claude.ai)
 - **Embeddings**: OpenAI `text-embedding-3-small` via Requesty gateway (matches reli)
 - **Deployment**: Railway (two services), one Supabase project
-- **CI**: GitHub Actions, mirroring reli's `./scripts/gates.sh` discipline (test, lint, typecheck)
+- **CI**: GitHub Actions — `gates.sh` (test, lint, typecheck) on every PR; `supabase db push` automatically on merge to `main`.
 
 ### Why two Railway services, not one
 
