@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { KindredMark } from '../components/Brand'
 
 const MCP_BASE = import.meta.env.VITE_MCP_BASE_URL ?? 'https://kindred-mcp.interstellarai.net'
 
 export function McpAuth() {
-  const [status, setStatus] = useState<'starting' | 'completing' | 'error'>('starting')
+  const [status, setStatus] = useState<'starting' | 'completing' | 'done' | 'error'>('starting')
   const [errorMsg, setErrorMsg] = useState('')
   const ran = useRef(false)
 
@@ -49,6 +50,7 @@ export function McpAuth() {
         }
         const { redirect_url } = (await resp.json()) as { redirect_url: string }
         sessionStorage.removeItem('mcp_flow_id')
+        setStatus('done')
         window.location.href = redirect_url
       } catch (err) {
         setStatus('error')
@@ -75,21 +77,110 @@ export function McpAuth() {
     return () => subscription.unsubscribe()
   }, [])
 
+  const cardStyle: React.CSSProperties = {
+    width: '100%',
+    maxWidth: 380,
+    background: 'var(--bg-elevated)',
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--r-xl)',
+    padding: 'var(--sp-7)',
+    boxShadow: 'var(--shadow-md)',
+    textAlign: 'center',
+  }
+
+  const wrapStyle: React.CSSProperties = {
+    minHeight: '100vh',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: 'var(--paper)',
+  }
+
+  const brandRow = (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 10,
+        marginBottom: 'var(--sp-5)',
+      }}
+    >
+      <KindredMark size={32} />
+      <span
+        style={{
+          fontFamily: 'var(--font-display)',
+          fontSize: 24,
+          lineHeight: 1,
+          letterSpacing: '-0.01em',
+        }}
+      >
+        <em>Kindred</em>
+        <span style={{ color: 'var(--terracotta)' }}>.</span>
+      </span>
+    </div>
+  )
+
   if (status === 'error') {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-stone-50">
-        <div className="w-full max-w-sm rounded-lg border border-red-200 bg-white p-8 text-center shadow-sm">
-          <h2 className="text-lg font-semibold text-red-700">Connection failed</h2>
-          <p className="mt-2 text-sm text-stone-600">{errorMsg}</p>
+      <div style={wrapStyle}>
+        <div style={{ ...cardStyle, borderColor: 'var(--rust)', borderLeftWidth: 3 }}>
+          {brandRow}
+          <h2
+            style={{
+              fontFamily: 'var(--font-display)',
+              fontWeight: 400,
+              fontSize: 'var(--fs-h3)',
+              color: 'var(--rust)',
+              margin: '0 0 var(--sp-3)',
+            }}
+          >
+            Connection failed
+          </h2>
+          <p style={{ color: 'var(--ink-3)', fontSize: 'var(--fs-sm)', margin: 0 }}>
+            {errorMsg}
+          </p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-stone-50">
-      <div className="text-center text-stone-600">
-        {status === 'completing' ? 'Completing authentication…' : 'Connecting to Claude…'}
+    <div style={wrapStyle}>
+      <div style={cardStyle}>
+        {brandRow}
+        <p
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 12,
+            color: 'var(--ink-3)',
+            letterSpacing: '0.08em',
+            textTransform: 'uppercase',
+            margin: '0 0 var(--sp-3)',
+          }}
+        >
+          {status === 'completing' ? 'Completing authentication…' : 'Connecting to Claude…'}
+        </p>
+        <div
+          style={{
+            display: 'inline-flex',
+            gap: 6,
+            alignItems: 'center',
+          }}
+        >
+          {[0, 0.18, 0.36].map((delay, i) => (
+            <span
+              key={i}
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                background: 'var(--moss)',
+                animation: `bounce 1.4s ease-in-out ${delay}s infinite`,
+              }}
+            />
+          ))}
+        </div>
       </div>
     </div>
   )

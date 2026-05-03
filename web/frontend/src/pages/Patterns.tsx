@@ -13,31 +13,66 @@ export function Patterns() {
       .catch((e: Error) => setError(e.message))
   }, [])
 
-  if (error) return <p className="text-red-700">{error}</p>
-  if (!patterns) return <p className="text-stone-500">Loading…</p>
+  if (error) return <p style={{ color: 'var(--rust)' }}>{error}</p>
+  if (!patterns) return <p style={{ color: 'var(--ink-3)' }}>Loading…</p>
+
+  const sorted = [...patterns].sort(
+    (a, b) => new Date(b.last_seen_at).getTime() - new Date(a.last_seen_at).getTime(),
+  )
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Patterns</h1>
+    <>
+      <div className="page-head">
+        <div className="page-eye">
+          <span className="glyph">◈</span> Patterns
+        </div>
+        <h1 className="page-title">
+          What <em>keeps</em> coming back
+        </h1>
+        <p className="page-sub">
+          Sorted by when you last saw them. Each one is named in your words.
+        </p>
+      </div>
+
+      <div className="readonly-banner">
+        <span className="lock">🔒</span>
+        <span>
+          <strong>Read-only.</strong> Patterns are named during your journaling sessions in Claude.
+        </span>
+      </div>
+
       {patterns.length === 0 && (
-        <p className="text-stone-500">
-          No named patterns yet. They'll appear once /kindred-hcb logs an
-          occurrence.
+        <p style={{ color: 'var(--ink-3)' }}>
+          No named patterns yet. They&apos;ll appear once /kindred-hcb logs an occurrence.
         </p>
       )}
-      <ul className="space-y-3">
-        {patterns.map((p) => (
-          <li key={p.id} className="rounded border border-stone-200 bg-white p-4">
-            <Link to={`/patterns/${p.id}`} className="block">
-              <div className="font-semibold">{p.name}</div>
-              <div className="mt-1 text-xs text-stone-500">
-                last seen {new Date(p.last_seen_at).toLocaleDateString()} ·{' '}
-                {p.occurrence_count} occurrences
+
+      <div className="pat-list">
+        {sorted.map((p) => {
+          const lastSeen = new Date(p.last_seen_at).toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+          })
+          return (
+            <Link
+              key={p.id}
+              to={`/patterns/${p.id}`}
+              style={{ textDecoration: 'none', color: 'inherit' }}
+            >
+              <div className="pat-card">
+                <div>
+                  <h3 className="pat-card-name">{p.name}</h3>
+                  {p.description && <p className="pat-card-desc">{p.description}</p>}
+                </div>
+                <div className="pat-card-stats">
+                  <span className="big">×{p.occurrence_count}</span>
+                  last seen {lastSeen}
+                </div>
               </div>
             </Link>
-          </li>
-        ))}
-      </ul>
-    </div>
+          )
+        })}
+      </div>
+    </>
   )
 }

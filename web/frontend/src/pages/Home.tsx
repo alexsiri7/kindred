@@ -1,12 +1,29 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { Link } from 'react-router'
 import { api, type EntrySummary } from '../api/client'
+
+function formatEntryDate(dateStr: string) {
+  const d = new Date(dateStr + 'T12:00')
+  return {
+    day: d.getDate().toString(),
+    weekday: d.toLocaleDateString('en-US', { weekday: 'short' }),
+    month: d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+  }
+}
+
+function groupByMonth(entries: EntrySummary[]): Record<string, EntrySummary[]> {
+  const groups: Record<string, EntrySummary[]> = {}
+  for (const entry of entries) {
+    const { month } = formatEntryDate(entry.date)
+    if (!groups[month]) groups[month] = []
+    groups[month].push(entry)
+  }
+  return groups
+}
 
 export function Home() {
   const [entries, setEntries] = useState<EntrySummary[] | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [query, setQuery] = useState('')
-  const navigate = useNavigate()
 
   useEffect(() => {
     api
@@ -15,47 +32,73 @@ export function Home() {
       .catch((e: Error) => setError(e.message))
   }, [])
 
-  const onSearch = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (query.trim()) {
-      navigate(`/search?q=${encodeURIComponent(query.trim())}`)
-    }
-  }
+  if (error) return <p style={{ color: 'var(--rust)' }}>{error}</p>
+  if (entries === null) return <p style={{ color: 'var(--ink-3)' }}>Loading…</p>
+
+  const byMonth = groupByMonth(entries)
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Recent entries</h1>
-      <form onSubmit={onSearch} className="flex gap-2">
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search by feeling or theme…"
-          className="flex-1 rounded border border-stone-300 px-3 py-2"
-        />
-        <button
-          type="submit"
-          className="rounded bg-stone-900 px-4 py-2 text-white hover:bg-stone-800"
-        >
-          Search
-        </button>
-      </form>
-      {error && <p className="text-red-700">{error}</p>}
-      {entries === null && !error && <p className="text-stone-500">Loading…</p>}
-      {entries && entries.length === 0 && (
-        <p className="text-stone-500">
+    <>
+      <div className="page-head">
+        <div className="page-eye">
+          <span className="glyph">◈</span> Journal
+        </div>
+        <h1 className="page-title">
+          <em>library</em>
+        </h1>
+        <p className="page-sub">Your entries, kept quietly.</p>
+      </div>
+
+      <div className="readonly-banner">
+        <span className="lock">🔒</span>
+        <span>
+          <strong>Read-only.</strong> Entries are written through the journaling conversation in
+          Claude — not from here.
+        </span>
+      </div>
+
+      {entries.length === 0 && (
+        <p style={{ color: 'var(--ink-3)' }}>
           No entries yet. Start a journaling session in Claude.ai.
         </p>
       )}
-      <ul className="space-y-3">
-        {entries?.map((e) => (
-          <li key={e.id} className="rounded border border-stone-200 bg-white p-4">
-            <Link to={`/entries/${e.id}`} className="block">
-              <div className="text-xs text-stone-500">{e.date}</div>
-              <div className="mt-1 line-clamp-2">{e.summary}</div>
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </div>
+
+      {Object.entries(byMonth).map(([month, items]) => (
+        <div key={month}>
+          <div className="month-div">{month}</div>
+          {items.map((entry) => {
+            const { day, weekday } = formatEntryDate(entry.date)
+            const title = entry.summary.length > 80
+              ? entry.summary.slice(0, 80) + '…'
+              : entry.summary
+            const body = entry.summary.length > 200
+              ? entry.summary.slice(0, 200) + '…'
+              : entry.summary
+
+            return (
+              <Link
+                key={entry.id}
+                to={`/entries/${entry.id}`}
+                style={{ textDecoration: 'none', color: 'inherit' }}
+              >
+                <div className="entry-row">
+                  <div className="entry-date">
+                    <span className="day">{day}</span>
+                    {weekday}
+                  </div>
+                  <div className="entry-body">
+                    <h3>{title}</h3>
+                    <p>{body}</p>
+                  </div>
+                  <div className="entry-meta">
+                    {entry.mood && <span className="mood">◉ {entry.mood}</span>}
+                  </div>
+                </div>
+              </Link>
+            )
+          })}
+        </div>
+      ))}
+    </>
   )
 }
