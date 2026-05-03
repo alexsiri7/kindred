@@ -1,5 +1,5 @@
 import { Link } from 'react-router'
-import { KindredMark } from '../components/Brand'
+import { KindredWordmark } from '../components/Brand'
 
 const LAST_UPDATED = '2026-05-03'
 
@@ -44,12 +44,8 @@ export function Privacy() {
   return (
     <div style={{ minHeight: '100vh', background: 'var(--paper)' }}>
       <nav className="nav">
-        <Link to="/" className="nav-brand" style={{ textDecoration: 'none' }}>
-          <KindredMark size={26} />
-          <span className="wm">
-            <em>Kindred</em>
-            <span className="dot">.</span>
-          </span>
+        <Link to="/" style={{ textDecoration: 'none' }}>
+          <KindredWordmark markSize={26} />
         </Link>
         <div className="nav-cta">
           <Link to="/" className="nav-link">

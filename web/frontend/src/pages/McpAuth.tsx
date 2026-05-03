@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { KindredMark } from '../components/Brand'
+import { KindredWordmark } from '../components/Brand'
 
 const MCP_BASE = import.meta.env.VITE_MCP_BASE_URL ?? 'https://kindred-mcp.interstellarai.net'
 
@@ -97,27 +97,8 @@ export function McpAuth() {
   }
 
   const brandRow = (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 10,
-        marginBottom: 'var(--sp-5)',
-      }}
-    >
-      <KindredMark size={32} />
-      <span
-        style={{
-          fontFamily: 'var(--font-display)',
-          fontSize: 24,
-          lineHeight: 1,
-          letterSpacing: '-0.01em',
-        }}
-      >
-        <em>Kindred</em>
-        <span style={{ color: 'var(--terracotta)' }}>.</span>
-      </span>
+    <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 'var(--sp-5)' }}>
+      <KindredWordmark markSize={32} />
     </div>
   )
 

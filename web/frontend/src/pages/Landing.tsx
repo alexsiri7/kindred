@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
-import { KindredMark } from '../components/Brand'
+import { KindredWordmark } from '../components/Brand'
 import { useAuth } from '../store/auth'
 
 /* ============================================================
@@ -10,12 +10,8 @@ function Nav() {
   const session = useAuth((s) => s.session)
   return (
     <nav className="nav">
-      <Link to="/" className="nav-brand" style={{ textDecoration: 'none' }}>
-        <KindredMark size={26} />
-        <span className="wm">
-          <em>Kindred</em>
-          <span className="dot">.</span>
-        </span>
+      <Link to="/" style={{ textDecoration: 'none' }}>
+        <KindredWordmark markSize={26} />
       </Link>
       <div className="nav-links">
         <a href="#how" className="nav-link">How it works</a>

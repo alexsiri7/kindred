@@ -87,6 +87,18 @@ describe('Layout — Report an issue link', () => {
     expect([...url.searchParams.keys()].sort()).toEqual(['body', 'template'])
   })
 
+  it('renders the side-brand wordmark with the canonical .wm structure', () => {
+    const { container } = render(
+      <MemoryRouter initialEntries={['/app']}>
+        <Layout />
+      </MemoryRouter>,
+    )
+    const sideBrand = container.querySelector('.side-brand')
+    expect(sideBrand).toBeInTheDocument()
+    expect(sideBrand?.querySelector('.wm em')?.textContent).toBe('Kindred')
+    expect(sideBrand?.querySelector('.wm .dot')?.textContent).toBe('.')
+  })
+
   it('does not embed window.location query/fragment in the issue body', () => {
     // Simulate a route that carries sensitive query/fragment data.
     Object.defineProperty(window, 'location', {

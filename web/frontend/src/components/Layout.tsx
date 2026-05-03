@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router'
 import { useAuth } from '../store/auth'
 import { supabase } from '../lib/supabase'
-import { KindredMark } from './Brand'
+import { KindredWordmark } from './Brand'
 import { CrisisDisclaimerModal } from './CrisisDisclaimerModal'
 
 type IconName = 'book' | 'layers' | 'search' | 'settings' | 'plug' | 'flag'
@@ -126,12 +126,8 @@ export function Layout() {
   return (
     <div className="app">
       <aside className="side">
-        <Link to="/app" className="side-brand">
-          <KindredMark size={26} />
-          <span className="wm">
-            <em>Kindred</em>
-            <span className="dot">.</span>
-          </span>
+        <Link to="/app" style={{ textDecoration: 'none' }}>
+          <KindredWordmark className="side-brand" markSize={26} />
         </Link>
 
         <div className="side-search" onClick={() => void navigate('/app/search')} style={{ cursor: 'pointer' }}>
