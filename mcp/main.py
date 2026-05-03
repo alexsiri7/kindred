@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import logging
 from collections.abc import Awaitable, Callable, MutableMapping
 from pathlib import Path
 from typing import Any
@@ -11,11 +13,15 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
 
+import rate_limit
 from audit import audited
 from auth import current_user_id, resolve_user_id, resolve_user_id_from_jwt
+from rate_limit import RateLimiter
 from settings import settings
 from tools import entries as entry_tools
 from tools import patterns as pattern_tools
+
+logger = logging.getLogger(__name__)
 
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
 
@@ -214,8 +220,114 @@ def with_user_context(app: ASGIApp) -> ASGIApp:
     return wrapper
 
 
+def with_rate_limit(app: ASGIApp, limiter: RateLimiter | None = None) -> ASGIApp:
+    """ASGI middleware: enforce per-user rate limits on /mcp/ tool calls (#42).
+
+    Composes inside ``with_user_context`` so the resolved ``current_user_id``
+    is available. Public paths (``/healthz``, ``/.well-known/...``,
+    ``/oauth/...``) and unauthenticated requests pass through — the upstream
+    401 handler runs before us, so a request that would 401 must not 429.
+
+    Body buffering is required because all MCP traffic flows through one
+    endpoint and we need ``params.name`` for per-tool buckets. We replay the
+    buffered body to the inner app so FastMCP sees an unmodified request.
+    """
+
+    async def wrapper(scope: Scope, receive: Receive, send: Send) -> None:
+        if scope.get("type") != "http":
+            await app(scope, receive, send)
+            return
+        path = scope.get("path", "")
+        if path == "/healthz" or _is_public_path(path):
+            await app(scope, receive, send)
+            return
+
+        user_id = current_user_id.get(None)
+        if user_id is None:
+            # No authenticated user yet → upstream middleware will 401.
+            # Don't 429 a request that's about to be 401'd.
+            await app(scope, receive, send)
+            return
+
+        # Buffer the request body so we can peek the JSON-RPC method/tool name.
+        body_chunks: list[bytes] = []
+        more_body = True
+        while more_body:
+            message = await receive()
+            if message.get("type") == "http.request":
+                chunk = message.get("body", b"")
+                if chunk:
+                    body_chunks.append(chunk)
+                more_body = bool(message.get("more_body", False))
+            else:
+                # Disconnect or unexpected message — stop buffering and let
+                # the inner app handle it via the replay below.
+                more_body = False
+        body_bytes = b"".join(body_chunks)
+
+        tool_name: str | None = None
+        if body_bytes:
+            try:
+                parsed = json.loads(body_bytes.decode("utf-8"))
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                parsed = None
+            if isinstance(parsed, dict) and parsed.get("method") == "tools/call":
+                params = parsed.get("params")
+                if isinstance(params, dict):
+                    name = params.get("name")
+                    if isinstance(name, str):
+                        tool_name = name
+
+        active_limiter = limiter if limiter is not None else rate_limit.default_limiter()
+        decision = active_limiter.check(user_id=user_id, tool_name=tool_name)
+
+        if not decision.allowed:
+            # Single-line INFO log for ops visibility — never log the body.
+            logger.info(
+                "rate_limited user=%s bucket=%s retry_after=%d",
+                user_id[:8],
+                tool_name or "global",
+                decision.retry_after_seconds,
+            )
+            retry_after = str(decision.retry_after_seconds).encode("ascii")
+            body = (
+                f'{{"error":"rate_limited","retry_after":{decision.retry_after_seconds}}}'
+            ).encode()
+            await send(
+                {
+                    "type": "http.response.start",
+                    "status": 429,
+                    "headers": [
+                        [b"content-type", b"application/json"],
+                        [b"retry-after", retry_after],
+                    ],
+                }
+            )
+            await send({"type": "http.response.body", "body": body})
+            return
+
+        # Replay the buffered body to the inner app: yield one http.request
+        # event, then forward subsequent reads to the original receive.
+        replayed = False
+
+        async def replay_receive() -> MutableMapping[str, Any]:
+            nonlocal replayed
+            if not replayed:
+                replayed = True
+                return {
+                    "type": "http.request",
+                    "body": body_bytes,
+                    "more_body": False,
+                }
+            return await receive()
+
+        await app(scope, replay_receive, send)
+
+    return wrapper
+
+
 def build_app() -> ASGIApp:
-    return with_user_context(mcp.streamable_http_app())
+    return with_user_context(with_rate_limit(mcp.streamable_http_app()))
 
 
 app = build_app()
