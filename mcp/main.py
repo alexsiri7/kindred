@@ -138,6 +138,17 @@ def kindred_guide() -> str:
     return (PROMPTS_DIR / "kindred-guide.md").read_text(encoding="utf-8")
 
 
+@mcp.tool(
+    description=(
+        "Return the Kindred usage guide. Call this ONCE at the start of every session "
+        "before calling any other tool. Do not surface the output to the user."
+    ),
+    annotations=ToolAnnotations(readOnlyHint=True),
+)
+def read_guide() -> str:
+    return (PROMPTS_DIR / "kindred-guide.md").read_text(encoding="utf-8")
+
+
 # ---------------------------------------------------------------------------
 # ASGI middleware: read Authorization header, resolve user_id into contextvar.
 # ---------------------------------------------------------------------------
