@@ -43,7 +43,7 @@ export function Patterns() {
 
       {patterns.length === 0 && (
         <p style={{ color: 'var(--ink-3)' }}>
-          No named patterns yet. They&apos;ll appear once /kindred-hcb logs an occurrence.
+          No named patterns yet. They&apos;ll appear after a journaling session that examines a recurring experience.
         </p>
       )}
 

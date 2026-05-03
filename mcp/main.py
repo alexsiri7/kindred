@@ -1,4 +1,4 @@
-"""FastMCP bootstrap: register all 8 tools, 3 prompts, and ASGI bearer middleware."""
+"""FastMCP bootstrap: register tools, the kindred://guide resource, and ASGI bearer middleware."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from typing import Any
 import sentry_sdk
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
+from mcp.types import ToolAnnotations
 
 from auth import current_user_id, resolve_user_id, resolve_user_id_from_jwt
 from settings import settings
@@ -51,40 +52,81 @@ _register_oauth_routes(mcp)
 # ---------------------------------------------------------------------------
 # Tool registration
 # ---------------------------------------------------------------------------
-mcp.tool()(entry_tools.save_entry)
-mcp.tool()(entry_tools.get_entry)
-mcp.tool()(entry_tools.list_recent_entries)
-mcp.tool()(entry_tools.search_entries)
+# Leading space is load-bearing: appended to per-tool descriptions, separates the nudge.
+GUIDE_NUDGE = " If you have not already, read the kindred://guide resource for usage guidance."
 
-mcp.tool()(pattern_tools.list_patterns)
-mcp.tool()(pattern_tools.get_pattern)
-mcp.tool()(pattern_tools.log_occurrence)
-mcp.tool()(pattern_tools.list_occurrences)
+mcp.tool(
+    description=(
+        "Call at the end of a session. Always confirm the summary with the user "
+        "before saving. Ask for a single mood word only if the user has offered it "
+        "naturally."
+        + GUIDE_NUDGE
+    ),
+)(entry_tools.save_entry)
+
+mcp.tool(
+    description="Fetch a single entry by date or id." + GUIDE_NUDGE,
+    annotations=ToolAnnotations(readOnlyHint=True),
+)(entry_tools.get_entry)
+
+mcp.tool(
+    description=(
+        "Only call when the user asks about past entries. Do not surface past "
+        "entries unprompted."
+        + GUIDE_NUDGE
+    ),
+    annotations=ToolAnnotations(readOnlyHint=True),
+)(entry_tools.list_recent_entries)
+
+mcp.tool(
+    description=(
+        "Only call when the user asks about past entries. Do not surface past "
+        "entries unprompted."
+        + GUIDE_NUDGE
+    ),
+    annotations=ToolAnnotations(readOnlyHint=True),
+)(entry_tools.search_entries)
+
+mcp.tool(
+    description=(
+        "Call when the user seems to be describing a recurring experience. Ask if "
+        "it matches one of their existing patterns before creating a new one."
+        + GUIDE_NUDGE
+    ),
+    annotations=ToolAnnotations(readOnlyHint=True),
+)(pattern_tools.list_patterns)
+
+mcp.tool(
+    description="Fetch a single named pattern with its typical quadrants." + GUIDE_NUDGE,
+    annotations=ToolAnnotations(readOnlyHint=True),
+)(pattern_tools.get_pattern)
+
+mcp.tool(
+    description=(
+        "Only call after the user has explicitly engaged with the HCB framework. "
+        "Never initiate HCB unprompted."
+        + GUIDE_NUDGE
+    ),
+)(pattern_tools.log_occurrence)
+
+mcp.tool(
+    description="List occurrences of a named pattern over time." + GUIDE_NUDGE,
+    annotations=ToolAnnotations(readOnlyHint=True),
+)(pattern_tools.list_occurrences)
 
 
 # ---------------------------------------------------------------------------
-# Prompts (loaded from disk per call so edits don't require a restart)
+# Resource (loaded from disk per call so edits don't require a restart)
 # ---------------------------------------------------------------------------
-@mcp.prompt(title="Kindred — Start session")
-def kindred_start() -> str:
-    return (PROMPTS_DIR / "kindred-start.md").read_text(encoding="utf-8")
-
-
-@mcp.prompt(title="Kindred — Hot Cross Bun")
-def kindred_hcb() -> str:
-    return (PROMPTS_DIR / "kindred-hcb.md").read_text(encoding="utf-8")
-
-
-@mcp.prompt(title="Kindred — Close session")
-def kindred_close() -> str:
-    return (PROMPTS_DIR / "kindred-close.md").read_text(encoding="utf-8")
-
-
-# ---------------------------------------------------------------------------
-# Resources (host-level, always-on guide referenced by the one-liner custom
-# instruction users paste into their MCP client of choice).
-# ---------------------------------------------------------------------------
-@mcp.resource("kindred://guide", title="Kindred — AI Guide", mime_type="text/markdown")
+@mcp.resource(
+    uri="kindred://guide",
+    name="Kindred Guide",
+    description=(
+        "Behavioural guide for the Kindred journaling MCP server. "
+        "Read once at the start of a session before calling any tool."
+    ),
+    mime_type="text/markdown",
+)
 def kindred_guide() -> str:
     return (PROMPTS_DIR / "kindred-guide.md").read_text(encoding="utf-8")
 
