@@ -43,7 +43,8 @@ def _stub_auth(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture
 def _stub_search_tool(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Make search_entries tool body succeed without hitting embeddings/db."""
+    """Stub embeddings + db so search_entries and list_recent_entries
+    tool bodies succeed without external dependencies."""
     monkeypatch.setattr(embeddings, "embed", lambda text: [0.0, 0.1, 0.2])
     monkeypatch.setattr(
         db, "match_entries", lambda user_id, vector, limit: []
@@ -207,11 +208,19 @@ async def test_public_paths_not_rate_limited(monkeypatch: pytest.MonkeyPatch) ->
         for _ in range(20):
             r = await c.get("/.well-known/oauth-protected-resource")
             assert r.status_code != 429
+        # /oauth/* prefix must also bypass; FastMCP's handler may 4xx the
+        # body, but the rate-limit layer must not 429 it.
+        for _ in range(20):
+            r = await c.post(
+                "/oauth/register",
+                json={"client_name": "test", "redirect_uris": ["http://x"]},
+            )
+            assert r.status_code != 429
 
 
 @pytest.mark.asyncio
 async def test_unauthenticated_returns_401_not_429(
-    monkeypatch: pytest.MonkeyPatch, _stub_auth: None
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(settings_module.settings, "mcp_rate_limit_global_per_min", 1)
     monkeypatch.setattr(settings_module.settings, "mcp_rate_limit_per_tool", "")
@@ -220,7 +229,6 @@ async def test_unauthenticated_returns_401_not_429(
         settings_module.settings, "mcp_base_url", "https://test.example.com"
     )
 
-    # Override _stub_auth to make every token fail to resolve.
     import main as main_module
 
     async def reject(_token: str) -> str | None:
@@ -234,9 +242,13 @@ async def test_unauthenticated_returns_401_not_429(
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test"
     ) as c:
+        statuses = []
         for _ in range(5):
             r = await c.post("/mcp/", headers={"authorization": "Bearer bogus"})
-        assert r.status_code == 401
+            statuses.append(r.status_code)
+
+    # Every single one must be 401 — no request may sneak past as 429.
+    assert statuses == [401, 401, 401, 401, 401]
 
 
 # ---------------------------------------------------------------------------
@@ -276,3 +288,169 @@ async def test_window_reset_via_monkeypatched_clock(
     assert first.status_code != 429
     assert second.status_code == 429
     assert third.status_code != 429
+
+
+# ---------------------------------------------------------------------------
+# Logging hygiene (privacy boundary on the 429 INFO log)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_429_log_does_not_leak_body(
+    monkeypatch: pytest.MonkeyPatch,
+    _stub_auth: None,
+    _stub_search_tool: None,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The 429 INFO log records user prefix + bucket + retry_after only.
+
+    Privacy boundary: JSON-RPC body and tool arguments must NOT appear in
+    any log record (Review Focus Area #4 in scope.md).
+    """
+    monkeypatch.setattr(settings_module.settings, "mcp_rate_limit_global_per_min", 1000)
+    monkeypatch.setattr(
+        settings_module.settings, "mcp_rate_limit_per_tool", "search_entries:1"
+    )
+    monkeypatch.setattr(settings_module.settings, "mcp_rate_limit_disabled", False)
+
+    secret_query = "deeply-personal-journal-content-DO-NOT-LOG"
+    from main import app
+
+    with caplog.at_level("INFO", logger="main"):
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://test"
+        ) as c:
+            headers = {"authorization": f"Bearer {BEARER}"}
+            await c.post(
+                "/mcp/",
+                json=_tools_call("search_entries", query=secret_query),
+                headers=headers,
+            )
+            denied = await c.post(
+                "/mcp/",
+                json=_tools_call("search_entries", query=secret_query),
+                headers=headers,
+            )
+            assert denied.status_code == 429
+
+    rl_records = [r for r in caplog.records if "rate_limited" in r.getMessage()]
+    assert len(rl_records) == 1, "expected exactly one 429 INFO log"
+    msg = rl_records[0].getMessage()
+    # Format contract.
+    assert msg.startswith(f"rate_limited user={USER_ID[:8]} ")
+    assert "bucket=search_entries" in msg
+    assert "retry_after=" in msg
+    # Privacy contract: body / args / full user id must not leak anywhere.
+    full_text = "\n".join(r.getMessage() for r in caplog.records)
+    assert secret_query not in full_text
+    assert USER_ID not in full_text  # only the 8-char prefix
+    assert "arguments" not in full_text
+    assert "jsonrpc" not in full_text
+
+
+# ---------------------------------------------------------------------------
+# JSON-RPC body parsing edge cases (non-tools/call methods, malformed bodies)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_non_tools_call_methods_do_not_crash(
+    monkeypatch: pytest.MonkeyPatch, _stub_auth: None
+) -> None:
+    """initialize / tools/list / empty / non-JSON bodies must not 500
+    in the rate-limit middleware. FastMCP downstream may still 4xx them."""
+    monkeypatch.setattr(settings_module.settings, "mcp_rate_limit_global_per_min", 1000)
+    monkeypatch.setattr(settings_module.settings, "mcp_rate_limit_per_tool", "")
+    monkeypatch.setattr(settings_module.settings, "mcp_rate_limit_disabled", False)
+
+    from main import app
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as c:
+        headers = {"authorization": f"Bearer {BEARER}"}
+        # Non-JSON body.
+        r1 = await c.post("/mcp/", content=b"not-json-at-all", headers=headers)
+        assert r1.status_code != 500
+        # Valid JSON but wrong shape (list, not dict).
+        r2 = await c.post("/mcp/", json=["nope"], headers=headers)
+        assert r2.status_code != 500
+        # Empty body.
+        r3 = await c.post("/mcp/", content=b"", headers=headers)
+        assert r3.status_code != 500
+        # Valid JSON-RPC but a different method (initialize is the FIRST
+        # request every MCP client sends).
+        r4 = await c.post(
+            "/mcp/",
+            json={"jsonrpc": "2.0", "id": 1, "method": "initialize"},
+            headers=headers,
+        )
+        assert r4.status_code != 500
+        # tools/list — no params.name; must hit only the global bucket.
+        r5 = await c.post(
+            "/mcp/",
+            json={"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
+            headers=headers,
+        )
+        assert r5.status_code != 500
+
+
+# ---------------------------------------------------------------------------
+# Multi-chunk body buffering (uvicorn may chunk large request bodies; the
+# httpx.ASGITransport-driven tests above always send a single chunk.)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_with_rate_limit_buffers_multi_chunk_body() -> None:
+    """Body chunks split across multiple http.request events are reassembled."""
+    from auth import current_user_id
+    from main import with_rate_limit
+    from rate_limit import RateLimiter
+
+    chunks = [
+        b'{"jsonrpc":"2.0","id":1,"method":"tools/call",',
+        b'"params":{"name":"search_entries","arguments":{"query":"hi"}}}',
+    ]
+    received_body = bytearray()
+
+    async def inner_app(scope: Any, receive: Any, send: Any) -> None:
+        # Drain everything the middleware replayed.
+        while True:
+            msg = await receive()
+            if msg.get("type") != "http.request":
+                break
+            received_body.extend(msg.get("body", b""))
+            if not msg.get("more_body"):
+                break
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"ok"})
+
+    limiter = RateLimiter(global_per_min=10, per_tool={}, disabled=False)
+    app = with_rate_limit(inner_app, limiter=limiter)
+
+    queue: list[dict[str, Any]] = [
+        {"type": "http.request", "body": chunks[0], "more_body": True},
+        {"type": "http.request", "body": chunks[1], "more_body": False},
+    ]
+
+    async def fake_receive() -> dict[str, Any]:
+        return queue.pop(0)
+
+    sent: list[dict[str, Any]] = []
+
+    async def fake_send(msg: dict[str, Any]) -> None:
+        sent.append(msg)
+
+    token = current_user_id.set("user-x")
+    try:
+        await app(
+            {"type": "http", "path": "/mcp/", "headers": []},
+            fake_receive,
+            fake_send,
+        )
+    finally:
+        current_user_id.reset(token)
+
+    assert bytes(received_body) == chunks[0] + chunks[1]
+    assert sent[0]["status"] == 200

@@ -19,11 +19,9 @@ Per-instance state (no Redis): the MCP server runs as a single Railway
 service today, mirroring the precedent set by ``oauth_state.py``. Bounded
 state + lock + lazy cleanup are copied directly from that module.
 
-Future migration: swap to a Redis-backed limiter if/when we go multi-instance,
-or to ``asyncio.Lock`` if profiling shows lock contention. Body buffering in
-the middleware also assumes JSON-RPC request bodies (``json_response=True``,
-``stateless_http=True`` on FastMCP today); a future SSE-style request stream
-would need a streaming-aware buffer.
+Constraint on body buffering: the middleware assumes JSON-RPC request bodies
+(``json_response=True``, ``stateless_http=True`` on FastMCP today). A
+streaming/SSE transport would need a streaming-aware buffer.
 """
 
 from __future__ import annotations
@@ -49,6 +47,11 @@ _lock = threading.Lock()
 
 @dataclass(frozen=True)
 class RateLimitDecision:
+    """Outcome of a single ``RateLimiter.check`` call.
+
+    ``retry_after_seconds`` is 0 when ``allowed`` is True, and >= 1 when False.
+    """
+
     allowed: bool
     retry_after_seconds: int
 
@@ -103,6 +106,10 @@ class RateLimiter:
         self._disabled = disabled
         self._buckets: dict[tuple[str, str], list[float]] = {}
 
+    @property
+    def is_disabled(self) -> bool:
+        return self._disabled
+
     def check(self, user_id: str, tool_name: str | None) -> RateLimitDecision:
         """Decide whether to allow this call; increment buckets atomically on allow."""
         if self._disabled:
@@ -129,14 +136,17 @@ class RateLimiter:
                     # Fail-open: never block legitimate traffic for an
                     # internal bookkeeping issue. Visible in logs for ops.
                     logger.warning(
-                        "rate_limit: bucket store at cap (%d), allowing request",
+                        "rate_limit: bucket store at cap (%d), allowing request "
+                        "from user=%s tool=%s",
                         len(self._buckets),
+                        user_id[:8],
+                        tool_name or "global",
                     )
                     return RateLimitDecision(True, 0)
 
             # Phase 1: check every bucket without mutating counts. If any
-            # would breach, return without incrementing the others — the
-            # atomicity invariant Task 2 GOTCHA spells out.
+            # would breach, return without incrementing the others.
+            # Invariant: a per-tool denial must not consume a global slot.
             biggest_retry = 0
             denied = False
             for key, limit in checks:
@@ -184,6 +194,7 @@ _instance: RateLimiter | None = None
 
 
 def build_default() -> RateLimiter:
+    """Construct a ``RateLimiter`` from the current process ``settings``."""
     return RateLimiter(
         global_per_min=settings.mcp_rate_limit_global_per_min,
         per_tool=_parse_per_tool_config(settings.mcp_rate_limit_per_tool),

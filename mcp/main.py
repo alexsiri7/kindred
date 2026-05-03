@@ -238,19 +238,29 @@ def with_rate_limit(app: ASGIApp, limiter: RateLimiter | None = None) -> ASGIApp
             await app(scope, receive, send)
             return
         path = scope.get("path", "")
-        if path == "/healthz" or _is_public_path(path):
+        if _is_public_path(path):
             await app(scope, receive, send)
             return
 
         user_id = current_user_id.get(None)
         if user_id is None:
-            # No authenticated user yet → upstream middleware will 401.
-            # Don't 429 a request that's about to be 401'd.
+            # Defensive: with the standard middleware order
+            # (with_user_context outer), unauthenticated requests are
+            # 401'd upstream and never reach here. This guards against
+            # direct mounts or reordering — auth must always win over 429.
+            await app(scope, receive, send)
+            return
+
+        active_limiter = limiter if limiter is not None else rate_limit.default_limiter()
+        if active_limiter.is_disabled:
+            # Kill-switch true bypass: skip body buffering entirely so the
+            # incident-response switch removes the middleware from the path.
             await app(scope, receive, send)
             return
 
         # Buffer the request body so we can peek the JSON-RPC method/tool name.
         body_chunks: list[bytes] = []
+        trailing: MutableMapping[str, Any] | None = None
         more_body = True
         while more_body:
             message = await receive()
@@ -260,16 +270,22 @@ def with_rate_limit(app: ASGIApp, limiter: RateLimiter | None = None) -> ASGIApp
                     body_chunks.append(chunk)
                 more_body = bool(message.get("more_body", False))
             else:
-                # Disconnect or unexpected message — stop buffering and let
-                # the inner app handle it via the replay below.
+                # Disconnect or unexpected message — remember it so the
+                # inner app sees it on the next receive() (e.g. a slow
+                # tool body that polls request.is_disconnected()).
+                trailing = message
                 more_body = False
         body_bytes = b"".join(body_chunks)
 
         tool_name: str | None = None
         if body_bytes:
             try:
-                parsed = json.loads(body_bytes.decode("utf-8"))
-            except (json.JSONDecodeError, UnicodeDecodeError):
+                parsed = json.loads(body_bytes)
+            except json.JSONDecodeError as exc:
+                logger.debug(
+                    "rate_limit: body parse failed (%s); per-tool cap will not apply",
+                    exc.__class__.__name__,
+                )
                 parsed = None
             if isinstance(parsed, dict) and parsed.get("method") == "tools/call":
                 params = parsed.get("params")
@@ -278,7 +294,6 @@ def with_rate_limit(app: ASGIApp, limiter: RateLimiter | None = None) -> ASGIApp
                     if isinstance(name, str):
                         tool_name = name
 
-        active_limiter = limiter if limiter is not None else rate_limit.default_limiter()
         decision = active_limiter.check(user_id=user_id, tool_name=tool_name)
 
         if not decision.allowed:
@@ -308,10 +323,13 @@ def with_rate_limit(app: ASGIApp, limiter: RateLimiter | None = None) -> ASGIApp
 
         # Replay the buffered body to the inner app: yield one http.request
         # event, then forward subsequent reads to the original receive.
+        # Any trailing non-http.request message (e.g. http.disconnect) we
+        # consumed during buffering is replayed before falling through.
         replayed = False
+        pending_trailing = trailing
 
         async def replay_receive() -> MutableMapping[str, Any]:
-            nonlocal replayed
+            nonlocal replayed, pending_trailing
             if not replayed:
                 replayed = True
                 return {
@@ -319,6 +337,10 @@ def with_rate_limit(app: ASGIApp, limiter: RateLimiter | None = None) -> ASGIApp
                     "body": body_bytes,
                     "more_body": False,
                 }
+            if pending_trailing is not None:
+                msg = pending_trailing
+                pending_trailing = None
+                return msg
             return await receive()
 
         await app(scope, replay_receive, send)
@@ -327,6 +349,12 @@ def with_rate_limit(app: ASGIApp, limiter: RateLimiter | None = None) -> ASGIApp
 
 
 def build_app() -> ASGIApp:
+    # Eagerly validate the per-tool config so a malformed
+    # MCP_RATE_LIMIT_PER_TOOL fails the process at startup rather than
+    # surfacing as an opaque per-request 500 once traffic arrives. We
+    # parse-and-discard rather than building the limiter so the cached
+    # instance still resolves lazily on first request.
+    rate_limit._parse_per_tool_config(settings.mcp_rate_limit_per_tool)
     return with_user_context(with_rate_limit(mcp.streamable_http_app()))
 
 

@@ -172,3 +172,58 @@ def test_default_limiter_caches_and_reset_for_tests() -> None:
     rate_limit.reset_for_tests()
     third = rate_limit.default_limiter()
     assert third is not first
+
+
+# ---------------------------------------------------------------------------
+# MAX_BUCKETS safety valve: lazy eviction + fail-open
+# ---------------------------------------------------------------------------
+
+
+def test_max_buckets_evicts_stale_then_allows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When at-cap, expired buckets are evicted on the next check and
+    the request goes through normally."""
+    monkeypatch.setattr(rate_limit, "MAX_BUCKETS", 5)
+    box, fake_now = _make_clock()
+    monkeypatch.setattr(rate_limit.time, "monotonic", fake_now)
+
+    limiter = RateLimiter(global_per_min=10, per_tool={}, disabled=False)
+    # Stuff the bucket dict with stale entries (window already expired).
+    for i in range(10):
+        limiter._buckets[(f"stale-user-{i}", rate_limit.GLOBAL_BUCKET_KEY)] = [
+            box[0] - 120.0,  # well outside WINDOW_SECONDS
+            1,
+        ]
+    assert len(limiter._buckets) == 10  # > MAX_BUCKETS
+
+    decision = limiter.check(USER_A, tool_name=None)
+    assert decision.allowed is True
+    assert len(limiter._buckets) <= 5
+
+
+def test_max_buckets_fail_open_when_eviction_cant_free(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """When at-cap with no stale entries, allow + WARNING log (fail-open).
+
+    The fail-open is a deliberate design choice — under stress we prefer
+    availability over correctness. This pins that contract.
+    """
+    monkeypatch.setattr(rate_limit, "MAX_BUCKETS", 5)
+    box, fake_now = _make_clock()
+    monkeypatch.setattr(rate_limit.time, "monotonic", fake_now)
+
+    limiter = RateLimiter(global_per_min=10, per_tool={}, disabled=False)
+    # All-fresh entries — eviction will free nothing.
+    for i in range(10):
+        limiter._buckets[(f"fresh-user-{i}", rate_limit.GLOBAL_BUCKET_KEY)] = [
+            box[0],
+            1,
+        ]
+
+    with caplog.at_level("WARNING", logger="rate_limit"):
+        decision = limiter.check(USER_A, tool_name=None)
+    assert decision.allowed is True
+    assert decision.retry_after_seconds == 0
+    assert any("bucket store at cap" in r.getMessage() for r in caplog.records)
