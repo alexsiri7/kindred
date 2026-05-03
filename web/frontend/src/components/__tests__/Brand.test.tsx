@@ -43,6 +43,12 @@ describe('KindredMark', () => {
     expect(container.innerHTML).not.toContain('var(--paper)')
   })
 
+  it('explicit accent prop wins over default token', () => {
+    const { container } = render(<KindredMark accent="#abc" />)
+    expect(container.innerHTML).toContain('#abc')
+    expect(container.innerHTML).not.toContain('var(--accent)')
+  })
+
   it('size prop sets svg width and height', () => {
     const { container } = render(<KindredMark size={64} />)
     const svg = container.querySelector('svg')
@@ -54,6 +60,21 @@ describe('KindredMark', () => {
     render(<KindredMark className="x" data-testid="m" />)
     const svg = screen.getByTestId('m')
     expect(svg).toHaveClass('x')
+  })
+
+  it('caller cannot override internal aria-hidden via spread', () => {
+    const { container } = render(<KindredMark aria-hidden={false} />)
+    expect(container.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true')
+  })
+
+  it('caller cannot override internal role/aria-label set by title', () => {
+    render(<KindredMark title="Kindred" role="presentation" aria-label="other" />)
+    expect(screen.getByRole('img', { name: 'Kindred' })).toBeInTheDocument()
+  })
+
+  it('caller cannot override focusable="false"', () => {
+    const { container } = render(<KindredMark focusable="true" />)
+    expect(container.querySelector('svg')?.getAttribute('focusable')).toBe('false')
   })
 })
 
@@ -84,5 +105,19 @@ describe('KindredWordmark', () => {
     const { container } = render(<KindredWordmark />)
     expect(container.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true')
     expect(screen.queryByRole('img')).toBeNull()
+  })
+
+  it('inverse forwards to inner mark and re-tints the wrapper text color', () => {
+    const { container } = render(<KindredWordmark inverse />)
+    const root = container.firstElementChild as HTMLElement
+    expect(container.innerHTML).toContain('var(--paper)')
+    expect(container.innerHTML).not.toContain('var(--ink)')
+    expect(root).toHaveStyle({ color: 'var(--paper)' })
+  })
+
+  it('forwards style prop to the root span', () => {
+    const { container } = render(<KindredWordmark style={{ marginTop: 4 }} />)
+    const root = container.firstElementChild as HTMLElement
+    expect(root.style.marginTop).toBe('4px')
   })
 })

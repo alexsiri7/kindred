@@ -25,13 +25,13 @@ export function KindredMark({
 
   return (
     <svg
+      {...rest}
       width={size}
       height={size}
       viewBox="0 0 64 64"
       fill="none"
       focusable="false"
       {...ariaProps}
-      {...rest}
     >
       <ellipse
         cx="32"
@@ -61,12 +61,15 @@ type KindredWordmarkProps = {
 
 export function KindredWordmark({
   markSize = 28,
+  // className replaces the default 'nav-brand' wholesale (does not merge);
+  // pass 'side-brand' or another class for non-nav contexts.
   className = 'nav-brand',
   style,
   inverse = false,
 }: KindredWordmarkProps) {
+  const wrapperStyle = inverse ? { color: 'var(--paper)', ...style } : style
   return (
-    <span className={className} style={style}>
+    <span className={className} style={wrapperStyle}>
       <KindredMark size={markSize} inverse={inverse} />
       <span className="wm">
         <em>Kindred</em>

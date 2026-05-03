@@ -20,4 +20,16 @@ describe('Privacy', () => {
     expect(screen.getAllByText(/Samaritans/i).length).toBeGreaterThan(0)
     expect(screen.getByText(/ico\.org\.uk/i)).toBeInTheDocument()
   })
+
+  it('renders the nav-brand wordmark in the page header', () => {
+    const { container } = render(
+      <MemoryRouter>
+        <Privacy />
+      </MemoryRouter>,
+    )
+    const navBrand = container.querySelector('.nav-brand')
+    expect(navBrand).toBeInTheDocument()
+    expect(navBrand?.querySelector('.wm em')?.textContent).toBe('Kindred')
+    expect(navBrand?.querySelector('.wm .dot')?.textContent).toBe('.')
+  })
 })
