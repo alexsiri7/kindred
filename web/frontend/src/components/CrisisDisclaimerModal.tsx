@@ -5,7 +5,6 @@ export function CrisisDisclaimerModal() {
   const [settings, setSettings] = useState<UserSettings | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
-  const [dismissed, setDismissed] = useState(false)
 
   useEffect(() => {
     api
@@ -25,7 +24,6 @@ export function CrisisDisclaimerModal() {
         crisis_disclaimer_acknowledged_at: new Date().toISOString(),
       })
       setSettings(next)
-      setDismissed(true)
     } catch (e) {
       setError((e as Error).message)
     } finally {
@@ -33,7 +31,6 @@ export function CrisisDisclaimerModal() {
     }
   }
 
-  if (dismissed) return null
   if (!settings) return null
   if (settings.crisis_disclaimer_acknowledged_at) return null
 

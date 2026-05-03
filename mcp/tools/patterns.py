@@ -39,7 +39,10 @@ async def log_occurrence(
         raise ValueError("intensity must be between 1 and 5")
     user_id = current_user_id.get()
 
-    pattern = await asyncio.to_thread(db.find_pattern_by_name, user_id, pattern_name)
+    pattern, entry = await asyncio.gather(
+        asyncio.to_thread(db.find_pattern_by_name, user_id, pattern_name),
+        asyncio.to_thread(db.get_entry_by_id, user_id, entry_id),
+    )
     if pattern is None:
         # Auto-create using the occurrence's quadrants as the initial typical shape.
         pattern_id = await asyncio.to_thread(
@@ -54,7 +57,6 @@ async def log_occurrence(
     else:
         pattern_id = str(pattern["id"])
 
-    entry = await asyncio.to_thread(db.get_entry_by_id, user_id, entry_id)
     if entry is None:
         raise LookupError(f"entry not found: {entry_id}")
     occurrence_date = str(entry["date"])

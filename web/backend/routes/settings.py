@@ -20,6 +20,10 @@ from auth import get_current_user
 router = APIRouter(tags=["settings"])
 
 
+def _user_metadata(user: dict[str, Any]) -> dict[str, Any]:
+    return cast(dict[str, Any], user.get("user_metadata") or {})
+
+
 class SettingsPatch(BaseModel):
     timezone: str | None = None
     transcript_enabled: bool | None = None
@@ -30,7 +34,7 @@ class SettingsPatch(BaseModel):
 def get_settings(
     user: dict[str, Any] = Depends(get_current_user),
 ) -> dict[str, Any]:
-    meta = cast(dict[str, Any], user.get("user_metadata") or {})
+    meta = _user_metadata(user)
     return {
         "timezone": meta.get("timezone"),
         "transcript_enabled": meta.get("transcript_enabled", True),
@@ -45,7 +49,7 @@ async def update_settings(
     patch: SettingsPatch,
     user: dict[str, Any] = Depends(get_current_user),
 ) -> dict[str, Any]:
-    current = dict(cast(dict[str, Any], user.get("user_metadata") or {}))
+    current = dict(_user_metadata(user))
     if patch.timezone is not None:
         current["timezone"] = patch.timezone
     if patch.transcript_enabled is not None:

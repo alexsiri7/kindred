@@ -2,6 +2,7 @@ import { useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { api, type ConnectorToken } from '../api/client'
 
 type ClientKey = 'claude' | 'chatgpt' | 'gemini'
+type CopyKey = 'mcp' | 'token' | 'oneliner'
 
 type ClientSetup = {
   key: ClientKey
@@ -68,7 +69,7 @@ const CLIENTS: ClientSetup[] = [
 export function Connect() {
   const [token, setToken] = useState<ConnectorToken | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [copiedKey, setCopiedKey] = useState<string | null>(null)
+  const [copiedKey, setCopiedKey] = useState<CopyKey | null>(null)
   const [activeClient, setActiveClient] = useState<ClientKey>('claude')
 
   const mint = async () => {
@@ -81,7 +82,7 @@ export function Connect() {
     }
   }
 
-  const copy = async (text: string, key: string) => {
+  const copy = async (text: string, key: CopyKey) => {
     try {
       await navigator.clipboard.writeText(text)
       setCopiedKey(key)
@@ -93,6 +94,17 @@ export function Connect() {
       )
     }
   }
+
+  const copyButton = (value: string, key: CopyKey, label: string) => (
+    <button
+      type="button"
+      className="btn btn-secondary"
+      aria-label={label}
+      onClick={() => void copy(value, key)}
+    >
+      {copiedKey === key ? 'Copied' : 'Copy'}
+    </button>
+  )
 
   const MCP_URL = import.meta.env.VITE_MCP_BASE_URL
     ? `${import.meta.env.VITE_MCP_BASE_URL}/sse`
@@ -161,14 +173,7 @@ export function Connect() {
           >
             {MCP_URL}
           </code>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            aria-label="Copy MCP server URL"
-            onClick={() => void copy(MCP_URL, 'mcp')}
-          >
-            {copiedKey === 'mcp' ? 'Copied' : 'Copy'}
-          </button>
+          {copyButton(MCP_URL, 'mcp', 'Copy MCP server URL')}
         </div>
 
         {/* Step 2 */}
@@ -220,16 +225,7 @@ export function Connect() {
           >
             {token ? 'Rotate' : 'Mint token'}
           </button>
-          {token && (
-            <button
-              type="button"
-              className="btn btn-secondary"
-              aria-label="Copy connector token"
-              onClick={() => void copy(token.token, 'token')}
-            >
-              {copiedKey === 'token' ? 'Copied' : 'Copy'}
-            </button>
-          )}
+          {token && copyButton(token.token, 'token', 'Copy connector token')}
         </div>
 
         {error && (
@@ -339,14 +335,7 @@ export function Connect() {
             >
               {ONE_LINER}
             </code>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              aria-label="Copy one-liner instruction"
-              onClick={() => void copy(ONE_LINER, 'oneliner')}
-            >
-              {copiedKey === 'oneliner' ? 'Copied' : 'Copy'}
-            </button>
+            {copyButton(ONE_LINER, 'oneliner', 'Copy one-liner instruction')}
           </div>
 
           <div className="entry-section-eye">Step 3 · Test it</div>
