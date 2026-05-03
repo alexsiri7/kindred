@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { KindredMark } from './Brand'
 import { CrisisDisclaimerModal } from './CrisisDisclaimerModal'
 
-type IconName = 'book' | 'layers' | 'search' | 'settings' | 'plug'
+type IconName = 'book' | 'layers' | 'search' | 'settings' | 'plug' | 'flag'
 
 function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
   const paths: Record<IconName, React.ReactNode> = {
@@ -41,6 +41,12 @@ function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
         <path d="M12 18v4" />
       </>
     ),
+    flag: (
+      <>
+        <path d="M4 22V4" />
+        <path d="M4 4h13l-2 4 2 4H4" />
+      </>
+    ),
   }
   return (
     <svg
@@ -57,6 +63,29 @@ function Icon({ name, size = 16 }: { name: IconName; size?: number }) {
       {paths[name]}
     </svg>
   )
+}
+
+const GITHUB_ISSUE_URL_BASE = 'https://github.com/alexsiri7/kindred/issues/new'
+
+function buildGitHubIssueUrl(): string {
+  const url = new URL(GITHUB_ISSUE_URL_BASE)
+  url.searchParams.set('template', 'bug_report.md')
+  url.searchParams.set('title', 'Bug: ')
+  // Keep body well under ~8 KB — GitHub returns HTTP 414 above that
+  // (github/docs#5136). Do NOT add console logs, redux state, or screenshots.
+  url.searchParams.set(
+    'body',
+    [
+      '## What happened',
+      '',
+      '<!-- Describe the bug -->',
+      '',
+      '## Context',
+      `- **Page:** ${window.location.href}`,
+      `- **Browser:** ${navigator.userAgent}`,
+    ].join('\n'),
+  )
+  return url.toString()
 }
 
 export function Layout() {
@@ -131,6 +160,19 @@ export function Layout() {
               <span>{item.label}</span>
             </Link>
           ))}
+        </nav>
+
+        <div className="side-eye">Help</div>
+        <nav className="side-nav">
+          <a
+            href={buildGitHubIssueUrl()}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="side-link"
+          >
+            <Icon name="flag" />
+            <span>Report an issue</span>
+          </a>
         </nav>
 
         <div className="side-foot">
