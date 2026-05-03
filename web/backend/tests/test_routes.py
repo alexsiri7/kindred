@@ -104,6 +104,43 @@ def test_export_data(monkeypatch: pytest.MonkeyPatch, client: TestClient) -> Non
     assert body["entries"][0]["id"] == "e1"
 
 
+def test_settings_patch_accepts_crisis_ack(
+    monkeypatch: pytest.MonkeyPatch, client: TestClient
+) -> None:
+    stored: dict[str, Any] = {"user_metadata": {}}
+
+    def _service_client() -> MagicMock:
+        sb = MagicMock()
+        admin = MagicMock()
+
+        def _get_user_by_id(_user_id: str) -> MagicMock:
+            res = MagicMock()
+            res.user = MagicMock()
+            res.user.user_metadata = stored["user_metadata"]
+            return res
+
+        def _update_user_by_id(_user_id: str, payload: dict[str, Any]) -> None:
+            stored["user_metadata"] = payload["user_metadata"]
+
+        admin.get_user_by_id.side_effect = _get_user_by_id
+        admin.update_user_by_id.side_effect = _update_user_by_id
+        sb.auth.admin = admin
+        return sb
+
+    monkeypatch.setattr(db, "service_client", _service_client)
+
+    res = client.patch(
+        "/settings",
+        json={"crisis_disclaimer_acknowledged_at": "2026-05-03T12:00:00Z"},
+    )
+    assert res.status_code == 200
+    body = res.json()
+    assert body["crisis_disclaimer_acknowledged_at"] == "2026-05-03T12:00:00Z"
+    assert stored["user_metadata"]["crisis_disclaimer_acknowledged_at"] == (
+        "2026-05-03T12:00:00Z"
+    )
+
+
 def test_mint_connector_token(monkeypatch: pytest.MonkeyPatch, client: TestClient) -> None:
     inserted: dict[str, Any] = {}
 
