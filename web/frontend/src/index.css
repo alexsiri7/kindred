@@ -513,6 +513,7 @@ section { padding: var(--sp-9) var(--sp-6); }
    Hero
    ============================================================ */
 .hero { padding: var(--sp-8) var(--sp-6) var(--sp-9); position: relative; overflow: hidden; }
+section.hero { font-family: var(--font-body); font-size: var(--fs-md); letter-spacing: normal; line-height: var(--lh-normal); }
 .hero-grid {
   max-width: 1120px; margin: 0 auto;
   display: grid; grid-template-columns: 1.15fr 1fr; gap: var(--sp-8);
