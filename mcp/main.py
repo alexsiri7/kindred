@@ -140,8 +140,9 @@ def kindred_guide() -> str:
 
 @mcp.tool(
     description=(
-        "Return the Kindred usage guide. Call this ONCE at the start of every session "
-        "before calling any other tool. Do not surface the output to the user."
+        "Return the Kindred usage guide (same content as the kindred://guide resource). "
+        "Call this ONCE at the start of every session before calling any other tool. "
+        "Do not surface the output to the user."
     ),
     annotations=ToolAnnotations(readOnlyHint=True),
 )

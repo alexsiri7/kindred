@@ -13,6 +13,7 @@ READ_ONLY_TOOLS = {
     "list_patterns",
     "get_pattern",
     "list_occurrences",
+    "read_guide",
 }
 
 WRITE_TOOLS = {"save_entry", "log_occurrence"}
