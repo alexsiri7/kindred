@@ -92,6 +92,7 @@ function buildGitHubIssueUrl(pagePath: string): string {
 
 export function Layout() {
   const session = useAuth((s) => s.session)
+  const initialized = useAuth((s) => s.initialized)
   const location = useLocation()
   const navigate = useNavigate()
   const reportIssueUrl = useMemo(
@@ -99,6 +100,12 @@ export function Layout() {
     [location.pathname],
   )
 
+  // Don't navigate before auth has hydrated — otherwise we'd strip
+  // any in-flight ?code=… (PKCE) or hash fragments and bounce a
+  // legitimately signed-in user back to /login.
+  if (!initialized) {
+    return null
+  }
   if (!session) {
     return <Navigate to="/login" replace />
   }
