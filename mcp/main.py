@@ -151,7 +151,7 @@ _PUBLIC_PATH_PREFIXES = ("/.well-known/", "/oauth/")
 
 
 def _is_public_path(path: str) -> bool:
-    return any(path.startswith(p) for p in _PUBLIC_PATH_PREFIXES)
+    return path.startswith(_PUBLIC_PATH_PREFIXES)
 
 
 def with_user_context(app: ASGIApp) -> ASGIApp:
@@ -281,10 +281,9 @@ def with_rate_limit(app: ASGIApp, limiter: RateLimiter | None = None) -> ASGIApp
         if body_bytes:
             try:
                 parsed = json.loads(body_bytes)
-            except json.JSONDecodeError as exc:
+            except json.JSONDecodeError:
                 logger.debug(
-                    "rate_limit: body parse failed (%s); per-tool cap will not apply",
-                    exc.__class__.__name__,
+                    "rate_limit: body parse failed; per-tool cap will not apply"
                 )
                 parsed = None
             if isinstance(parsed, dict) and parsed.get("method") == "tools/call":

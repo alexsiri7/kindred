@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { api, type UserSettings } from '../api/client'
 import { Button } from '../components/Button'
 
-const ALL_TIMEZONES: string[] = Intl.supportedValuesOf('timeZone')
+const ALL_TIMEZONES = Intl.supportedValuesOf('timeZone')
 
 function TimezoneInput({
   value,
