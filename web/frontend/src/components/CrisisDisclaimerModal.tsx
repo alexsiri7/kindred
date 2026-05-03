@@ -33,9 +33,7 @@ export function CrisisDisclaimerModal() {
     }
   }
 
-  if (dismissed) return null
-  if (!settings) return null
-  if (settings.crisis_disclaimer_acknowledged_at) return null
+  if (dismissed || !settings || settings.crisis_disclaimer_acknowledged_at) return null
 
   return (
     <div

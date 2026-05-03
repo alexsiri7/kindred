@@ -4,15 +4,6 @@ import { createRoot } from 'react-dom/client'
 import { createBrowserRouter, RouterProvider } from 'react-router'
 import './index.css'
 import './lib/supabase'
-
-if (import.meta.env.VITE_SENTRY_DSN) {
-  Sentry.init({
-    dsn: import.meta.env.VITE_SENTRY_DSN,
-    integrations: [Sentry.browserTracingIntegration()],
-    tracesSampleRate: 0.1,
-    environment: 'production',
-  })
-}
 import { Layout } from './components/Layout'
 import { RouteError } from './components/RouteError'
 import { Landing } from './pages/Landing'
@@ -26,6 +17,15 @@ import { Settings } from './pages/Settings'
 import { Connect } from './pages/Connect'
 import { McpAuth } from './pages/McpAuth'
 import { Privacy } from './pages/Privacy'
+
+if (import.meta.env.VITE_SENTRY_DSN) {
+  Sentry.init({
+    dsn: import.meta.env.VITE_SENTRY_DSN,
+    integrations: [Sentry.browserTracingIntegration()],
+    tracesSampleRate: 0.1,
+    environment: 'production',
+  })
+}
 
 const router = createBrowserRouter([
   {
