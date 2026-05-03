@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { api, type UserSettings } from '../api/client'
 import { Button } from '../components/Button'
 
 const ALL_TIMEZONES = Intl.supportedValuesOf('timeZone')
+const TIMEZONES_LOWER = ALL_TIMEZONES.map((tz) => [tz, tz.toLowerCase()] as const)
 
 function TimezoneInput({
   value,
@@ -20,11 +21,18 @@ function TimezoneInput({
     setInputVal(value)
   }, [value])
 
-  const suggestions = inputVal.trim()
-    ? ALL_TIMEZONES.filter((tz) =>
-        tz.toLowerCase().includes(inputVal.toLowerCase()),
-      ).slice(0, 10)
-    : []
+  const suggestions = useMemo(() => {
+    const query = inputVal.trim().toLowerCase()
+    if (!query) return []
+    const out: string[] = []
+    for (const [tz, lower] of TIMEZONES_LOWER) {
+      if (lower.includes(query)) {
+        out.push(tz)
+        if (out.length === 10) break
+      }
+    }
+    return out
+  }, [inputVal])
 
   // reset highlighted index whenever the suggestion list changes
   useEffect(() => {

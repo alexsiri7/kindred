@@ -125,6 +125,10 @@ mcp.tool(
 # ---------------------------------------------------------------------------
 # Resource (loaded from disk per call so edits don't require a restart)
 # ---------------------------------------------------------------------------
+def _load_guide() -> str:
+    return (PROMPTS_DIR / "kindred-guide.md").read_text(encoding="utf-8")
+
+
 @mcp.resource(
     uri="kindred://guide",
     name="Kindred Guide",
@@ -135,19 +139,21 @@ mcp.tool(
     mime_type="text/markdown",
 )
 def kindred_guide() -> str:
-    return (PROMPTS_DIR / "kindred-guide.md").read_text(encoding="utf-8")
+    return _load_guide()
 
 
-@mcp.tool(
+async def read_guide() -> str:
+    return _load_guide()
+
+
+mcp.tool(
     description=(
         "Return the Kindred usage guide (same content as the kindred://guide resource). "
         "Call this ONCE at the start of every session before calling any other tool. "
         "Do not surface the output to the user."
     ),
     annotations=ToolAnnotations(readOnlyHint=True),
-)
-def read_guide() -> str:
-    return (PROMPTS_DIR / "kindred-guide.md").read_text(encoding="utf-8")
+)(audited("read_guide")(read_guide))
 
 
 # ---------------------------------------------------------------------------

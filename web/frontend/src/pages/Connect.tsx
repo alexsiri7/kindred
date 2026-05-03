@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { api, type ConnectorToken } from '../api/client'
+import { Button } from '../components/Button'
 
 type ClientKey = 'claude-desktop' | 'cursor' | 'windsurf'
 
@@ -117,7 +118,10 @@ export function Connect() {
     ? `${import.meta.env.VITE_MCP_BASE_URL}/mcp`
     : 'https://kindred-mcp.interstellarai.net/mcp'
 
-  const client = CLIENTS.find((c) => c.key === activeClient) ?? CLIENTS[0]
+  const client = useMemo(
+    () => CLIENTS.find((c) => c.key === activeClient) ?? CLIENTS[0],
+    [activeClient],
+  )
 
   return (
     <>
@@ -168,13 +172,9 @@ export function Connect() {
           >
             {MCP_URL}
           </code>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => void copy(MCP_URL)}
-          >
+          <Button variant="secondary" onClick={() => void copy(MCP_URL)}>
             Copy
-          </button>
+          </Button>
         </div>
 
         {/* Step 2 */}
@@ -219,21 +219,13 @@ export function Connect() {
               kdr_••••••••••••••••••••••••
             </code>
           )}
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => void mint()}
-          >
+          <Button variant="secondary" onClick={() => void mint()}>
             {token ? 'Rotate' : 'Mint token'}
-          </button>
+          </Button>
           {token && (
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => void copy(token.token)}
-            >
+            <Button variant="secondary" onClick={() => void copy(token.token)}>
               {copied ? 'Copied' : 'Copy'}
-            </button>
+            </Button>
           )}
         </div>
 
@@ -336,13 +328,9 @@ export function Connect() {
             >
               {ONE_LINER}
             </code>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => void copy(ONE_LINER)}
-            >
+            <Button variant="secondary" onClick={() => void copy(ONE_LINER)}>
               Copy
-            </button>
+            </Button>
           </div>
 
           <div className="entry-section-eye">Step 3 · Test it</div>
