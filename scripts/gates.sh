@@ -41,4 +41,14 @@ if [ -d "web/frontend" ]; then
   cd ../..
 fi
 
+echo "--- service-role boundary check (#44) ---"
+# Per #44, service_role / service_client must not appear in request-handling
+# code (mcp/, web/backend/). Tests legitimately reference them for historical
+# context so are excluded.
+if grep -rn --include='*.py' --exclude-dir=tests -E 'service_role|service_client' mcp/ web/backend/; then
+  echo "FAIL: service_role / service_client reference found in request-handling code."
+  echo "      Per #44, these are only allowed under scripts/ and supabase/."
+  exit 1
+fi
+
 echo "=== All gates passed ==="

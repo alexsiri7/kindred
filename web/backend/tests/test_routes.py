@@ -15,7 +15,12 @@ from auth import get_current_user
 from main import app
 
 USER_ID = "11111111-2222-3333-4444-555555555555"
-USER = {"user_id": USER_ID, "email": "u@example.com", "jwt": "fake-jwt"}
+USER = {
+    "user_id": USER_ID,
+    "email": "u@example.com",
+    "jwt": "fake-jwt",
+    "user_metadata": {},
+}
 
 
 @pytest.fixture
@@ -107,27 +112,13 @@ def test_export_data(monkeypatch: pytest.MonkeyPatch, client: TestClient) -> Non
 def test_settings_patch_accepts_crisis_ack(
     monkeypatch: pytest.MonkeyPatch, client: TestClient
 ) -> None:
-    stored: dict[str, Any] = {"user_metadata": {}}
+    captured: dict[str, Any] = {}
 
-    def _service_client() -> MagicMock:
-        sb = MagicMock()
-        admin = MagicMock()
+    async def _fake_update(jwt: str, metadata: dict[str, Any]) -> dict[str, Any]:
+        captured["metadata"] = metadata
+        return metadata
 
-        def _get_user_by_id(_user_id: str) -> MagicMock:
-            res = MagicMock()
-            res.user = MagicMock()
-            res.user.user_metadata = stored["user_metadata"]
-            return res
-
-        def _update_user_by_id(_user_id: str, payload: dict[str, Any]) -> None:
-            stored["user_metadata"] = payload["user_metadata"]
-
-        admin.get_user_by_id.side_effect = _get_user_by_id
-        admin.update_user_by_id.side_effect = _update_user_by_id
-        sb.auth.admin = admin
-        return sb
-
-    monkeypatch.setattr(db, "service_client", _service_client)
+    monkeypatch.setattr(db, "update_user_metadata", _fake_update)
 
     res = client.patch(
         "/settings",
@@ -136,7 +127,7 @@ def test_settings_patch_accepts_crisis_ack(
     assert res.status_code == 200
     body = res.json()
     assert body["crisis_disclaimer_acknowledged_at"] == "2026-05-03T12:00:00Z"
-    assert stored["user_metadata"]["crisis_disclaimer_acknowledged_at"] == (
+    assert captured["metadata"]["crisis_disclaimer_acknowledged_at"] == (
         "2026-05-03T12:00:00Z"
     )
 
@@ -144,7 +135,7 @@ def test_settings_patch_accepts_crisis_ack(
 def test_mint_connector_token(monkeypatch: pytest.MonkeyPatch, client: TestClient) -> None:
     inserted: dict[str, Any] = {}
 
-    def _service_client() -> MagicMock:
+    def _build_user_client(_jwt: str) -> MagicMock:
         sb = MagicMock()
 
         def _table(name: str) -> MagicMock:
@@ -164,9 +155,94 @@ def test_mint_connector_token(monkeypatch: pytest.MonkeyPatch, client: TestClien
         sb.table.side_effect = _table
         return sb
 
-    monkeypatch.setattr(db, "service_client", _service_client)
+    monkeypatch.setattr(db, "user_client", _build_user_client)
     res = client.post("/connect/token")
     assert res.status_code == 200
     body = res.json()
     assert isinstance(body["token"], str) and len(body["token"]) > 20
     assert inserted["payload"]["user_id"] == USER_ID
+
+
+# ---------------------------------------------------------------------------
+# settings + account
+# ---------------------------------------------------------------------------
+def test_get_settings_reads_user_metadata() -> None:
+    user = {
+        **USER,
+        "user_metadata": {"timezone": "America/New_York", "transcript_enabled": False},
+    }
+    app.dependency_overrides[get_current_user] = lambda: user
+    try:
+        res = TestClient(app).get("/settings")
+    finally:
+        app.dependency_overrides.clear()
+    assert res.status_code == 200
+    assert res.json() == {
+        "timezone": "America/New_York",
+        "transcript_enabled": False,
+        "crisis_disclaimer_acknowledged_at": None,
+    }
+
+
+def test_get_settings_defaults_when_metadata_empty(client: TestClient) -> None:
+    res = client.get("/settings")
+    assert res.status_code == 200
+    assert res.json() == {
+        "timezone": None,
+        "transcript_enabled": True,
+        "crisis_disclaimer_acknowledged_at": None,
+    }
+
+
+def test_patch_settings_invokes_update_user_metadata(
+    monkeypatch: pytest.MonkeyPatch, client: TestClient
+) -> None:
+    captured: dict[str, Any] = {}
+
+    async def _fake_update(jwt: str, metadata: dict[str, Any]) -> dict[str, Any]:
+        captured["jwt"] = jwt
+        captured["metadata"] = metadata
+        return metadata
+
+    monkeypatch.setattr(db, "update_user_metadata", _fake_update)
+    res = client.patch(
+        "/settings",
+        json={"timezone": "Europe/London", "transcript_enabled": False},
+    )
+    assert res.status_code == 200
+    assert captured["jwt"] == "fake-jwt"
+    assert captured["metadata"] == {
+        "timezone": "Europe/London",
+        "transcript_enabled": False,
+    }
+    assert res.json() == {
+        "timezone": "Europe/London",
+        "transcript_enabled": False,
+        "crisis_disclaimer_acknowledged_at": None,
+    }
+
+
+def test_delete_account_calls_rpc(
+    monkeypatch: pytest.MonkeyPatch, client: TestClient
+) -> None:
+    rpc_calls: list[str] = []
+
+    def _build_user_client(_jwt: str) -> MagicMock:
+        sb = MagicMock()
+        rpc_chain = MagicMock()
+        rpc_response = MagicMock()
+        rpc_response.data = None
+        rpc_chain.execute.return_value = rpc_response
+
+        def _rpc(name: str) -> MagicMock:
+            rpc_calls.append(name)
+            return rpc_chain
+
+        sb.rpc.side_effect = _rpc
+        return sb
+
+    monkeypatch.setattr(db, "user_client", _build_user_client)
+    res = client.delete("/account")
+    assert res.status_code == 200
+    assert res.json() == {"status": "deleted"}
+    assert rpc_calls == ["delete_my_account"]

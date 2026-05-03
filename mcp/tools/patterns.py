@@ -73,7 +73,7 @@ async def log_occurrence(
         trigger,
         notes,
     )
-    await asyncio.to_thread(db.update_pattern_seen, pattern_id)
+    await asyncio.to_thread(db.update_pattern_seen, user_id, pattern_id)
     return occurrence_id
 
 

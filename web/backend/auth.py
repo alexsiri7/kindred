@@ -50,4 +50,9 @@ async def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Token missing subject"
         )
-    return {"user_id": user_id, "email": data.get("email"), "jwt": cred.credentials}
+    return {
+        "user_id": user_id,
+        "email": data.get("email"),
+        "jwt": cred.credentials,
+        "user_metadata": data.get("user_metadata") or {},
+    }

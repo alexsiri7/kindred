@@ -6,7 +6,6 @@ class Settings(BaseSettings):
 
     supabase_url: str = ""
     supabase_anon_key: str = ""
-    supabase_service_role_key: str = ""
     # HS256 path. RS256/JWKS support is the planned upgrade once we know the
     # production project's signing algorithm.
     supabase_jwt_secret: str = ""
