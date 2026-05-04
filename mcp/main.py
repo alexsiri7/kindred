@@ -96,8 +96,8 @@ mcp.tool(
 
 mcp.tool(
     description=(
-        "Call after HCB analysis to check whether the examined moment matches an "
-        "existing pattern before creating a new one."
+        "Call after HCB analysis to check whether the examined moment matches a "
+        "recurring experience pattern before creating a new one."
         + GUIDE_NUDGE
     ),
     annotations=ToolAnnotations(readOnlyHint=True),
@@ -112,7 +112,7 @@ mcp.tool(
     description=(
         "Call after completing HCB analysis with the user to record the occurrence "
         "against a named pattern. Call list_patterns first to find an existing match "
-        "before creating a new one."
+        "before creating a new one. Never initiate HCB unprompted."
         + GUIDE_NUDGE
     ),
 )(audited("log_occurrence")(pattern_tools.log_occurrence))
