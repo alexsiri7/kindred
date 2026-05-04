@@ -6,8 +6,8 @@ Two auth flows merged here:
   we mint a short-lived HS256 JWT signed with ``SUPABASE_JWT_SECRET`` per
   call. RLS still enforces ownership.
 
-The defensive ``eq("user_id", user_id)`` filters on every query stay as
-belt-and-braces — RLS protects against malicious clients, the filter
+The defensive ``eq("user_id", user_id)`` filters stay as belt-and-braces
+on read/list helpers — RLS protects against malicious clients, the filter
 protects against bugs in our own code.
 """
 
@@ -16,6 +16,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from functools import lru_cache
 from typing import Any, cast
+from uuid import UUID
 
 import httpx
 import jwt
@@ -70,7 +71,12 @@ def user_client(user_id: str, jwt_token: str | None = None) -> Client:
 
 @lru_cache(maxsize=1)
 def anon_client() -> Client:
-    """Anon-key client with no user JWT — only safe for security-definer RPCs."""
+    """Anon-key client with no user JWT — only safe for security-definer RPCs.
+
+    Used by ``lib.services.tokens.lookup_token`` to resolve a connector
+    bearer token before the user_id is known. Cached because the resulting
+    client carries no per-user state.
+    """
     return create_client(settings.supabase_url, settings.supabase_anon_key)
 
 
@@ -219,8 +225,6 @@ def list_patterns(
 def get_pattern(
     user_id: str, jwt_token: str | None, name_or_id: str
 ) -> dict[str, Any] | None:
-    from uuid import UUID
-
     try:
         UUID(name_or_id)
     except ValueError:
@@ -269,7 +273,7 @@ def update_pattern_seen(
     pattern_id: str,
     last_seen_at: str | None = None,
 ) -> None:
-    last_seen = last_seen_at or datetime.utcnow().isoformat()
+    last_seen = last_seen_at or datetime.now(UTC).isoformat()
     # Read-then-write because PostgREST doesn't support raw SQL increments.
     res = (
         _table(user_id, jwt_token, "patterns")

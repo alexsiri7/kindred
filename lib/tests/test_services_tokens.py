@@ -54,3 +54,41 @@ def test_lookup_token_returns_none_when_unknown(
     fake_anon.rpc.return_value.execute.return_value = MagicMock(data=None)
     monkeypatch.setattr(db, "anon_client", lambda: fake_anon)
     assert tokens.lookup_token("nope") is None
+
+
+def test_mint_token_generates_distinct_tokens_per_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Two consecutive mints must yield different tokens — guards against
+    a regression to a constant or memoized secret generator."""
+
+    def _build_user_client(_uid: str, _jwt: str | None = None) -> MagicMock:
+        sb = MagicMock()
+        sb.table.return_value.insert.return_value.execute.return_value = MagicMock(
+            data=[{"created_at": "2026-05-01T00:00:00Z"}]
+        )
+        return sb
+
+    monkeypatch.setattr(db, "user_client", _build_user_client)
+    a = tokens.mint_token(USER_ID, "jwt")["token"]
+    b = tokens.mint_token(USER_ID, "jwt")["token"]
+    assert a != b
+
+
+def test_mint_token_raises_when_insert_returns_no_row(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """If RLS denies the insert, supabase-py returns empty data with no
+    exception — we must surface a RuntimeError so the caller never gets
+    a phantom token."""
+
+    def _build_user_client(_uid: str, _jwt: str | None = None) -> MagicMock:
+        sb = MagicMock()
+        sb.table.return_value.insert.return_value.execute.return_value = MagicMock(
+            data=[]
+        )
+        return sb
+
+    monkeypatch.setattr(db, "user_client", _build_user_client)
+    with pytest.raises(RuntimeError, match="mint_token returned no row"):
+        tokens.mint_token(USER_ID, "jwt")

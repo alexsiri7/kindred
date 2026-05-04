@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import MagicMock
 
+import httpx
 import jwt
 import pytest
 
@@ -88,3 +89,49 @@ def test_user_client_passes_through_provided_jwt(
     monkeypatch.setattr(db, "create_client", _fake_create_client)
     db.user_client(USER_ID, "caller-supplied-jwt")
     fake_client.postgrest.auth.assert_called_once_with("caller-supplied-jwt")
+
+
+# ---------------------------------------------------------------------------
+# update_user_metadata httpx contract
+# ---------------------------------------------------------------------------
+@pytest.mark.asyncio
+async def test_update_user_metadata_calls_gotrue_with_data_envelope(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The body must be ``{"data": ...}``, NOT ``{"user_metadata": ...}``.
+
+    GoTrue's user-side endpoint contract — locks the leading-comment warning
+    in lib/db.py:update_user_metadata into a test.
+    """
+    monkeypatch.setattr(
+        settings_module.settings, "supabase_url", "https://x.supabase.co"
+    )
+    monkeypatch.setattr(settings_module.settings, "supabase_anon_key", "anon-key")
+
+    captured: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["method"] = request.method
+        captured["url"] = str(request.url)
+        captured["headers"] = dict(request.headers)
+        captured["body"] = request.read().decode()
+        return httpx.Response(200, json={"user_metadata": {"timezone": "UTC"}})
+
+    transport = httpx.MockTransport(handler)
+    real_async_client = httpx.AsyncClient
+
+    def _patched_client(*a: Any, **kw: Any) -> Any:
+        kw["transport"] = transport
+        return real_async_client(*a, **kw)
+
+    monkeypatch.setattr(httpx, "AsyncClient", _patched_client)
+
+    out = await db.update_user_metadata("user-jwt", {"timezone": "UTC"})
+
+    assert captured["method"] == "PUT"
+    assert captured["url"].endswith("/auth/v1/user")
+    assert captured["headers"]["apikey"] == "anon-key"
+    assert captured["headers"]["authorization"] == "Bearer user-jwt"
+    assert '"data"' in captured["body"]
+    assert '"user_metadata"' not in captured["body"]
+    assert out == {"timezone": "UTC"}

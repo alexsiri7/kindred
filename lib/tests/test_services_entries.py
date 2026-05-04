@@ -73,3 +73,113 @@ def test_get_entry_with_occurrences_raises_when_missing(
     monkeypatch.setattr(db, "get_entry_by_id", lambda *a, **k: None)
     with pytest.raises(LookupError):
         entries_service.get_entry_with_occurrences(USER_ID, None, ENTRY_ID)
+
+
+def test_get_entry_with_occurrences_attaches_occurrences_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The frontend timeline reads the ``occurrences`` key off the entry payload."""
+    monkeypatch.setattr(
+        db,
+        "get_entry_by_id",
+        lambda u, j, eid: {"id": eid, "date": "2026-05-01", "summary": "x"},
+    )
+    monkeypatch.setattr(
+        db,
+        "list_occurrences_for_entry",
+        lambda u, j, eid: [{"id": "occ-1", "entry_id": eid}],
+    )
+    out = entries_service.get_entry_with_occurrences(USER_ID, None, ENTRY_ID)
+    assert out["id"] == ENTRY_ID
+    assert out["occurrences"] == [{"id": "occ-1", "entry_id": ENTRY_ID}]
+
+
+def test_get_entry_by_date_or_id_dispatches_to_correct_db_helper(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        db, "get_entry_by_id", lambda u, j, eid: {"id": eid, "via": "id"}
+    )
+    monkeypatch.setattr(
+        db,
+        "get_entry_by_date",
+        lambda u, j, d: {"id": "x", "via": "date", "date": d},
+    )
+    by_id = entries_service.get_entry_by_date_or_id(
+        USER_ID, None, entry_id=ENTRY_ID
+    )
+    by_date = entries_service.get_entry_by_date_or_id(
+        USER_ID, None, date="2026-05-01"
+    )
+    assert by_id["via"] == "id"
+    assert by_id["id"] == ENTRY_ID
+    assert by_date["via"] == "date"
+    assert by_date["date"] == "2026-05-01"
+
+
+def test_search_entries_embeds_then_matches(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Validate → embed → match: order and arg-shape pinned at service level."""
+    captured: dict[str, Any] = {}
+
+    def fake_embed(q: str) -> list[float]:
+        captured["q"] = q
+        return [0.1, 0.2]
+
+    def fake_match(
+        u: str, j: str | None, vec: list[float], limit: int
+    ) -> list[dict[str, Any]]:
+        captured["uid"] = u
+        captured["jwt"] = j
+        captured["vec"] = vec
+        captured["limit"] = limit
+        return [{"entry_id": "e1", "similarity": 0.9}]
+
+    monkeypatch.setattr(embeddings, "embed", fake_embed)
+    monkeypatch.setattr(db, "match_entries", fake_match)
+    out = entries_service.search_entries(USER_ID, "the-jwt", "loneliness", limit=3)
+    assert captured == {
+        "q": "loneliness",
+        "uid": USER_ID,
+        "jwt": "the-jwt",
+        "vec": [0.1, 0.2],
+        "limit": 3,
+    }
+    assert out[0]["entry_id"] == "e1"
+
+
+def test_list_recent_entries_passes_through_args(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, Any] = {}
+
+    def fake(u: str, j: str | None, limit: int) -> list[dict[str, Any]]:
+        captured.update(uid=u, jwt=j, limit=limit)
+        return [{"id": "e1"}]
+
+    monkeypatch.setattr(db, "list_recent_entries", fake)
+    out = entries_service.list_recent_entries(USER_ID, "the-jwt", 7)
+    assert out == [{"id": "e1"}]
+    assert captured == {"uid": USER_ID, "jwt": "the-jwt", "limit": 7}
+
+
+def test_save_entry_logs_when_embedding_fails(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Embedding failure must surface a log line so the orphan entry is discoverable."""
+
+    def fake_insert_entry(*a: Any, **k: Any) -> str:
+        return ENTRY_ID
+
+    def fake_embed(_: str) -> list[float]:
+        raise RuntimeError("requesty 5xx")
+
+    monkeypatch.setattr(db, "insert_entry", fake_insert_entry)
+    monkeypatch.setattr(embeddings, "embed", fake_embed)
+    with caplog.at_level("ERROR"), pytest.raises(RuntimeError, match="requesty 5xx"):
+        entries_service.save_entry(USER_ID, None, "2026-05-01", "x")
+    assert any(
+        "persisted without embedding" in record.message for record in caplog.records
+    )

@@ -30,8 +30,9 @@ def mint_token(user_id: str, jwt_token: str) -> dict[str, Any]:
     )
     raw: Any = res.data or []
     rows: list[dict[str, Any]] = list(raw)
-    created_at = rows[0].get("created_at") if rows else None
-    return {"token": token, "created_at": created_at}
+    if not rows:
+        raise RuntimeError("mint_token returned no row")
+    return {"token": token, "created_at": rows[0].get("created_at")}
 
 
 def lookup_token(token: str) -> str | None:
@@ -42,6 +43,6 @@ def lookup_token(token: str) -> str | None:
     """
     res = db.anon_client().rpc("lookup_connector_token", {"p_token": token}).execute()
     user_id = res.data
-    if not user_id:
+    if user_id is None:
         return None
     return str(user_id)

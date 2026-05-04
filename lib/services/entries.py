@@ -7,9 +7,12 @@ web side calls them directly from sync FastAPI routes.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from lib import db, embeddings
+
+logger = logging.getLogger(__name__)
 
 
 def save_entry(
@@ -26,8 +29,19 @@ def save_entry(
     behaviour — not a service-level concern).
     """
     entry_id = db.insert_entry(user_id, jwt_token, date, summary, mood, transcript)
-    vector = embeddings.embed(summary)
-    db.insert_embedding(user_id, jwt_token, entry_id, vector, summary)
+    try:
+        vector = embeddings.embed(summary)
+        db.insert_embedding(user_id, jwt_token, entry_id, vector, summary)
+    except Exception:
+        # Entry row is committed but the embedding failed — search will not
+        # surface this entry. Log so ops can reconcile; re-raise so the
+        # caller sees the failure.
+        logger.exception(
+            "save_entry: entry %s persisted without embedding (user=%s)",
+            entry_id,
+            user_id[:8],
+        )
+        raise
     return entry_id
 
 

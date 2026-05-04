@@ -1,3 +1,6 @@
+# Build with: docker build -f web/Dockerfile -t kindred-web .
+# (Build context must be the repo root so we can copy ../lib.)
+
 # Stage 1: build the React frontend
 FROM node:20-slim AS frontend-build
 WORKDIR /build
@@ -12,19 +15,23 @@ ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 ENV VITE_SENTRY_DSN=$VITE_SENTRY_DSN
 
-COPY frontend/package*.json ./
+COPY web/frontend/package*.json ./
 RUN npm ci --silent
-COPY frontend/ ./
+COPY web/frontend/ ./
 RUN npm run build
 
 # Stage 2: Python backend + built frontend assets
 FROM python:3.12-slim
 WORKDIR /app
 
-COPY backend/requirements.txt .
+COPY web/backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY backend/ /app/
+# Install the shared lib as an editable package so imports resolve as `lib.*`.
+COPY lib/ /lib/
+RUN pip install --no-cache-dir -e /lib
+
+COPY web/backend/ /app/
 COPY --from=frontend-build /build/dist /app/static
 
 ENV PYTHONPATH=/app

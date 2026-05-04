@@ -47,8 +47,24 @@ def log_occurrence(
     trigger: str | None = None,
     notes: str | None = None,
 ) -> str:
+    """Persist a pattern_occurrence; auto-create the pattern when absent.
+
+    Side effects: inserts an occurrence row, bumps ``last_seen_at`` and
+    ``occurrence_count`` on the pattern. If ``pattern_name`` doesn't match
+    an existing pattern, creates one using the supplied quadrants as the
+    initial typical shape. Raises ``ValueError`` for ``intensity`` outside
+    1..5; ``LookupError`` when ``entry_id`` doesn't exist.
+    """
     if intensity is not None and not (1 <= intensity <= 5):
         raise ValueError("intensity must be between 1 and 5")
+
+    # Validate entry_id BEFORE potentially creating an orphan pattern: if the
+    # entry lookup fails after a pattern was auto-created, the orphan would
+    # silently corrupt the catalog on retry.
+    entry = db.get_entry_by_id(user_id, jwt_token, entry_id)
+    if entry is None:
+        raise LookupError(f"entry not found: {entry_id}")
+    occurrence_date = str(entry["date"])
 
     pattern = db.find_pattern_by_name(user_id, jwt_token, pattern_name)
     if pattern is None:
@@ -64,11 +80,6 @@ def log_occurrence(
         )
     else:
         pattern_id = str(pattern["id"])
-
-    entry = db.get_entry_by_id(user_id, jwt_token, entry_id)
-    if entry is None:
-        raise LookupError(f"entry not found: {entry_id}")
-    occurrence_date = str(entry["date"])
 
     occurrence_id = db.insert_occurrence(
         user_id,
@@ -94,6 +105,7 @@ def list_occurrences(
     pattern_name_or_id: str,
     since: str | None = None,
 ) -> list[dict[str, Any]]:
+    """List occurrences for a pattern resolved by UUID or by name."""
     try:
         UUID(pattern_name_or_id)
         pattern_id = pattern_name_or_id

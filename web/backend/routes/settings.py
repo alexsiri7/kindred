@@ -9,14 +9,17 @@ calls the ``delete_my_account`` security-definer RPC.
 
 from __future__ import annotations
 
+import logging
 from typing import Any, cast
 
-from fastapi import APIRouter, Depends
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, status
 from lib import db
 from pydantic import BaseModel
 
 from auth import get_current_user
 
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["settings"])
 
 
@@ -54,7 +57,26 @@ async def update_settings(
         current["crisis_disclaimer_acknowledged_at"] = (
             patch.crisis_disclaimer_acknowledged_at
         )
-    merged = await db.update_user_metadata(user["jwt"], current)
+    try:
+        merged = await db.update_user_metadata(user["jwt"], current)
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 401:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token rejected by auth server",
+            ) from exc
+        logger.warning(
+            "update_settings: GoTrue %d", exc.response.status_code
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Auth server rejected update",
+        ) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Auth server unreachable",
+        ) from exc
     return {
         "timezone": merged.get("timezone"),
         "transcript_enabled": merged.get("transcript_enabled", True),

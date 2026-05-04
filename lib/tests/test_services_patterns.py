@@ -100,3 +100,157 @@ def test_get_pattern_raises_when_missing(monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setattr(db, "get_pattern", lambda *a, **k: None)
     with pytest.raises(LookupError):
         patterns_service.get_pattern(USER_ID, None, "missing")
+
+
+def test_log_occurrence_uses_existing_pattern_when_found(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Steady-state path: pattern already exists, must NOT auto-create."""
+    inserted: dict[str, Any] = {}
+
+    monkeypatch.setattr(
+        db,
+        "find_pattern_by_name",
+        lambda u, j, n: {"id": PATTERN_ID, "name": n},
+    )
+    monkeypatch.setattr(
+        db,
+        "insert_pattern",
+        lambda *a, **k: pytest.fail(
+            "must not auto-create when pattern exists"
+        ),
+    )
+    monkeypatch.setattr(
+        db,
+        "get_entry_by_id",
+        lambda u, j, eid: {"id": eid, "date": "2026-05-01"},
+    )
+
+    def fake_insert_occ(
+        user_id: str,
+        jwt_token: str | None,
+        pattern_id: str,
+        *a: Any,
+        **k: Any,
+    ) -> str:
+        inserted["pattern_id"] = pattern_id
+        return OCCURRENCE_ID
+
+    monkeypatch.setattr(db, "insert_occurrence", fake_insert_occ)
+    monkeypatch.setattr(db, "update_pattern_seen", lambda *a, **k: None)
+
+    occ = patterns_service.log_occurrence(
+        USER_ID, None, "Sunday dread", ENTRY_ID, "t", "e", "b", "s"
+    )
+    assert occ == OCCURRENCE_ID
+    assert inserted["pattern_id"] == PATTERN_ID
+
+
+def test_log_occurrence_raises_when_entry_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Stale entry_id must raise LookupError, not produce a half-written row."""
+    monkeypatch.setattr(
+        db, "find_pattern_by_name", lambda *a, **k: {"id": PATTERN_ID}
+    )
+    monkeypatch.setattr(db, "get_entry_by_id", lambda *a, **k: None)
+    with pytest.raises(LookupError, match="entry not found"):
+        patterns_service.log_occurrence(
+            USER_ID, None, "x", ENTRY_ID, "t", "e", "b", "s"
+        )
+
+
+def test_log_occurrence_validates_entry_before_creating_pattern(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Bad entry_id + missing pattern: pattern must NOT be auto-created
+    (no orphan in catalog on retry)."""
+    monkeypatch.setattr(db, "find_pattern_by_name", lambda *a, **k: None)
+    monkeypatch.setattr(
+        db,
+        "insert_pattern",
+        lambda *a, **k: pytest.fail(
+            "must not auto-create pattern when entry is missing"
+        ),
+    )
+    monkeypatch.setattr(db, "get_entry_by_id", lambda *a, **k: None)
+    with pytest.raises(LookupError, match="entry not found"):
+        patterns_service.log_occurrence(
+            USER_ID, None, "ghost", ENTRY_ID, "t", "e", "b", "s"
+        )
+
+
+def test_get_pattern_with_occurrences_attaches_occurrences_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        db,
+        "get_pattern",
+        lambda u, j, pid: {"id": pid, "name": "Sunday dread"},
+    )
+    monkeypatch.setattr(
+        db,
+        "list_occurrences",
+        lambda u, j, pid, since: [{"id": "occ-1", "pattern_id": pid}],
+    )
+    out = patterns_service.get_pattern_with_occurrences(
+        USER_ID, None, PATTERN_ID
+    )
+    assert out["name"] == "Sunday dread"
+    assert out["occurrences"] == [{"id": "occ-1", "pattern_id": PATTERN_ID}]
+
+
+def test_get_pattern_with_occurrences_raises_when_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(db, "get_pattern", lambda *a, **k: None)
+    with pytest.raises(LookupError):
+        patterns_service.get_pattern_with_occurrences(
+            USER_ID, None, PATTERN_ID
+        )
+
+
+def test_list_occurrences_uses_uuid_directly_when_given(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        db,
+        "find_pattern_by_name",
+        lambda *a, **k: pytest.fail(
+            "should not look up when arg is already a UUID"
+        ),
+    )
+    captured: dict[str, Any] = {}
+
+    def fake_list(
+        u: str, j: str | None, pid: str, since: str | None
+    ) -> list[dict[str, Any]]:
+        captured["pid"] = pid
+        return []
+
+    monkeypatch.setattr(db, "list_occurrences", fake_list)
+    patterns_service.list_occurrences(USER_ID, None, PATTERN_ID)
+    assert captured["pid"] == PATTERN_ID
+
+
+def test_list_occurrences_resolves_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        db,
+        "find_pattern_by_name",
+        lambda u, j, n: {"id": PATTERN_ID, "name": n},
+    )
+    monkeypatch.setattr(
+        db, "list_occurrences", lambda *a, **k: [{"id": "o1"}]
+    )
+    out = patterns_service.list_occurrences(USER_ID, None, "Sunday dread")
+    assert out == [{"id": "o1"}]
+
+
+def test_list_occurrences_raises_when_name_unknown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(db, "find_pattern_by_name", lambda *a, **k: None)
+    with pytest.raises(LookupError, match="pattern not found"):
+        patterns_service.list_occurrences(USER_ID, None, "ghost")

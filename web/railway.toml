@@ -1,9 +1,11 @@
 # Railway config for the web service.
-# Service root directory = "web/" in the Railway dashboard.
-# Dockerfile is web/Dockerfile (auto-detected from root).
+# Service root directory = repo root (so the Docker build context can see
+# ../lib for the shared package install). Set this service's Root Directory
+# to "/" in the Railway dashboard, and point the config file at this file.
+# Dockerfile path is relative to the repo root.
 
 [build]
-dockerfilePath = "Dockerfile"
+dockerfilePath = "web/Dockerfile"
 
 [deploy]
 healthcheckPath = "/healthz"
