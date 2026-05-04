@@ -1,5 +1,10 @@
 import { useEffect, useState } from 'react'
-import { api, type UserSettings } from '../api/client'
+import {
+  api,
+  type ConnectorToken,
+  type ConnectorTokenSummary,
+  type UserSettings,
+} from '../api/client'
 import { Button } from '../components/Button'
 
 const ALL_TIMEZONES = Intl.supportedValuesOf('timeZone')
@@ -180,6 +185,10 @@ export function Settings() {
   const [settings, setSettings] = useState<UserSettings | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [connectorTokens, setConnectorTokens] = useState<
+    ConnectorTokenSummary[]
+  >([])
+  const [reissued, setReissued] = useState<ConnectorToken | null>(null)
 
   useEffect(() => {
     api
@@ -199,6 +208,48 @@ export function Settings() {
       })
       .catch((e: Error) => setError(e.message))
   }, [])
+
+  useEffect(() => {
+    api
+      .get<ConnectorTokenSummary[]>('/connect/tokens')
+      .then(setConnectorTokens)
+      .catch(() => {})
+  }, [])
+
+  const refreshTokens = () =>
+    api.get<ConnectorTokenSummary[]>('/connect/tokens').then(setConnectorTokens)
+
+  const revokeToken = async (id: string) => {
+    if (
+      !window.confirm(
+        'Revoke this token? Any AI client using it will get 401 on the next request.',
+      )
+    )
+      return
+    await api.post(`/connect/tokens/${id}/revoke`)
+    await refreshTokens()
+  }
+
+  const reissueToken = async (id: string) => {
+    if (
+      !window.confirm(
+        'Revoke this token and mint a new one? You will need to copy the new value into your AI client.',
+      )
+    )
+      return
+    await api.post(`/connect/tokens/${id}/revoke`)
+    const next = await api.post<ConnectorToken>('/connect/token')
+    setReissued(next)
+    await refreshTokens()
+  }
+
+  const tokenStatus = (
+    t: ConnectorTokenSummary,
+  ): 'revoked' | 'expired' | 'active' => {
+    if (t.revoked_at) return 'revoked'
+    if (t.expires_at && new Date(t.expires_at) < new Date()) return 'expired'
+    return 'active'
+  }
 
   const save = async (patch: Partial<UserSettings>) => {
     setSaving(true)
@@ -292,6 +343,115 @@ export function Settings() {
                 : 'Off — summary only'
             }
           />
+        </div>
+      </div>
+
+      <div className="set-section">
+        <div>
+          <div className="set-label">Connector tokens</div>
+          <p className="set-help">
+            Tokens you&apos;ve minted from <a href="/app/connect">Connect</a>.
+            Revoke any you no longer trust — the next MCP request will get 401.
+          </p>
+        </div>
+        <div className="set-control" style={{ width: '100%' }}>
+          {connectorTokens.length === 0 ? (
+            <p style={{ color: 'var(--ink-3)', fontSize: 13 }}>
+              No tokens yet.
+            </p>
+          ) : (
+            <ul
+              style={{
+                listStyle: 'none',
+                padding: 0,
+                margin: 0,
+                width: '100%',
+              }}
+            >
+              {connectorTokens.map((t) => {
+                const status = tokenStatus(t)
+                return (
+                  <li
+                    key={t.id}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '8px 0',
+                      borderBottom: '1px solid var(--border)',
+                    }}
+                  >
+                    <div style={{ fontSize: 13 }}>
+                      <div style={{ color: 'var(--ink)' }}>
+                        {status === 'revoked' && (
+                          <span style={{ color: 'var(--rust)' }}>Revoked</span>
+                        )}
+                        {status === 'expired' && (
+                          <span style={{ color: 'var(--ink-3)' }}>Expired</span>
+                        )}
+                        {status === 'active' && <span>Active</span>}
+                        {' · created '}
+                        {new Date(t.created_at).toLocaleDateString()}
+                      </div>
+                      <div style={{ color: 'var(--ink-3)', fontSize: 12 }}>
+                        Last used{' '}
+                        {t.last_used_at
+                          ? new Date(t.last_used_at).toLocaleString()
+                          : 'never'}
+                        {t.expires_at &&
+                          ` · expires ${new Date(t.expires_at).toLocaleDateString()}`}
+                      </div>
+                    </div>
+                    {status === 'active' && (
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <Button
+                          variant="secondary"
+                          onClick={() => void revokeToken(t.id)}
+                        >
+                          Revoke
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          onClick={() => void reissueToken(t.id)}
+                        >
+                          Revoke and reissue
+                        </Button>
+                      </div>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+          {reissued && (
+            <div
+              role="alert"
+              style={{
+                marginTop: 12,
+                padding: '10px 14px',
+                background: 'var(--paper-2)',
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--r-md)',
+                fontSize: 13,
+              }}
+            >
+              <div style={{ marginBottom: 4 }}>
+                <strong>
+                  New token — copy it now, it won&apos;t be shown again:
+                </strong>
+              </div>
+              <code
+                style={{
+                  wordBreak: 'break-all',
+                  display: 'block',
+                  fontFamily: 'var(--font-mono)',
+                }}
+              >
+                {reissued.token}
+              </code>
+            </div>
+          )}
         </div>
       </div>
 

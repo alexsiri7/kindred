@@ -180,11 +180,29 @@ export function Connect() {
         {/* Step 2 */}
         <div className="entry-section-eye">Step 2 · Connector token</div>
         <div
+          role="note"
+          style={{
+            background: 'var(--paper-2)',
+            border: '1px solid var(--rust-2, var(--rust))',
+            borderLeftWidth: 3,
+            borderRadius: 'var(--r-md)',
+            padding: '10px 14px',
+            marginBottom: 'var(--sp-3)',
+            fontSize: 13,
+            color: 'var(--ink-2)',
+            lineHeight: 1.5,
+          }}
+        >
+          <strong>Treat this token like a password.</strong> Anyone who has it
+          can read your journal. Don&apos;t paste it into chat, screenshots, or
+          shared docs.
+        </div>
+        <div
           style={{
             display: 'flex',
             gap: 8,
             alignItems: 'center',
-            marginBottom: 'var(--sp-4)',
+            marginBottom: token?.expires_at ? 4 : 'var(--sp-4)',
           }}
         >
           {token ? (
@@ -236,6 +254,18 @@ export function Connect() {
             </button>
           )}
         </div>
+
+        {token?.expires_at && (
+          <p
+            style={{
+              fontSize: 12,
+              color: 'var(--ink-3)',
+              margin: '0 0 var(--sp-4)',
+            }}
+          >
+            Expires {new Date(token.expires_at).toLocaleDateString()}
+          </p>
+        )}
 
         {error && (
           <p style={{ color: 'var(--rust)', fontSize: 13, margin: '0 0 var(--sp-3)' }}>

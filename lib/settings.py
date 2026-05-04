@@ -25,5 +25,10 @@ class CoreSettings(BaseSettings):
 
     sentry_dsn: str = ""
 
+    # Connector token lifecycle. Tokens minted by POST /connect/token expire
+    # this many days after creation; the lookup RPC returns NULL (→ 401) for
+    # expired or revoked tokens.
+    connector_token_ttl_days: int = 90
+
 
 settings = CoreSettings()

@@ -49,6 +49,19 @@ async def test_lookup_token_rpc_none_propagates(
 
 
 @pytest.mark.asyncio
+async def test_verify_token_none_when_lookup_returns_none(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Lifecycle (#41): RPC returns NULL for revoked OR expired tokens — the
+    verifier returns None, the middleware translates that to 401. No MCP
+    code change is needed for the lifecycle work; the RPC handles it.
+    """
+    monkeypatch.setattr(tokens, "lookup_token", lambda _t: None)
+    verifier = ConnectorTokenVerifier()
+    assert await verifier.verify_token("revoked-or-expired-token") is None
+
+
+@pytest.mark.asyncio
 async def test_verify_token_known_returns_access_token(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
