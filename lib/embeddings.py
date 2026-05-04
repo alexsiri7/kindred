@@ -10,7 +10,7 @@ from functools import lru_cache
 
 from openai import OpenAI
 
-from settings import settings
+from lib.settings import settings
 
 EMBEDDING_MODEL = "openai/text-embedding-3-small"
 EMBEDDING_DIM = 1536

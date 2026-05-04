@@ -19,9 +19,9 @@ import asyncio
 from contextvars import ContextVar
 
 import jwt
+from lib.services import tokens
 from mcp.server.auth.provider import AccessToken, TokenVerifier
 
-import db
 from settings import settings
 
 current_user_id: ContextVar[str] = ContextVar("current_user_id")
@@ -32,12 +32,12 @@ class ConnectorTokenVerifier(TokenVerifier):
 
     async def verify_token(self, token: str) -> AccessToken | None:
         # supabase-py is sync; wrap in to_thread so we don't block the loop.
-        row = await asyncio.to_thread(db.lookup_connector_token, token)
-        if row is None:
+        user_id = await asyncio.to_thread(tokens.lookup_token, token)
+        if user_id is None:
             return None
         return AccessToken(
             token=token,
-            client_id=str(row["user_id"]),
+            client_id=user_id,
             scopes=["user"],
             expires_at=None,
         )
@@ -45,10 +45,7 @@ class ConnectorTokenVerifier(TokenVerifier):
 
 async def resolve_user_id(token: str) -> str | None:
     """Used by the ASGI middleware to populate the contextvar."""
-    row = await asyncio.to_thread(db.lookup_connector_token, token)
-    if row is None:
-        return None
-    return str(row["user_id"])
+    return await asyncio.to_thread(tokens.lookup_token, token)
 
 
 def resolve_user_id_from_jwt(token: str) -> str | None:

@@ -1,27 +1,27 @@
-"""Anon-key Supabase clients + every read/write helper used by tools.
+"""Supabase Client factory + every read/write helper used by services.
 
-The MCP server has no incoming user JWT (tools are invoked with a connector
-token or an OAuth code, neither of which carry Supabase claims), so we mint a
-short-lived HS256 JWT signed with ``SUPABASE_JWT_SECRET`` per call and attach
-it via ``client.postgrest.auth(...)``. RLS then enforces ownership in
-Postgres; the defensive ``eq("user_id", user_id)`` filters stay as
-belt-and-braces.
+Two auth flows merged here:
+- web flow: caller passes the user's Supabase JWT, we attach it directly.
+- MCP flow: caller has only a user_id (resolved from a connector token);
+  we mint a short-lived HS256 JWT signed with ``SUPABASE_JWT_SECRET`` per
+  call. RLS still enforces ownership.
 
-The only path that doesn't have a user_id at hand is the connector-token
-verifier, which calls a security-definer RPC under the anon role.
+The defensive ``eq("user_id", user_id)`` filters on every query stay as
+belt-and-braces — RLS protects against malicious clients, the filter
+protects against bugs in our own code.
 """
 
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from functools import lru_cache
-from typing import Any
-from uuid import UUID
+from typing import Any, cast
 
+import httpx
 import jwt
 from supabase import Client, create_client
 
-from settings import settings
+from lib.settings import settings
 
 _USER_JWT_TTL = timedelta(minutes=5)
 
@@ -50,14 +50,21 @@ def _supabase_user_jwt(user_id: str) -> str:
     )
 
 
-def user_client(user_id: str) -> Client:
-    """Anon-key client with a freshly-minted user JWT attached.
+def user_client(user_id: str, jwt_token: str | None = None) -> Client:
+    """Anon-key client with a user JWT attached.
 
-    Constructed per call — never cached, because caching across users would
-    re-introduce the cross-user leak the refactor is designed to prevent.
+    If ``jwt_token`` is provided (web flow), it's attached as-is — the
+    caller has already verified it via Supabase ``/auth/v1/user``. If
+    ``jwt_token`` is None (MCP flow), we mint one for ``user_id`` from
+    ``SUPABASE_JWT_SECRET``. Either way RLS scopes every query.
+
+    Constructed per call — never cached, because caching across users
+    would re-introduce the cross-user leak the architecture is designed
+    to prevent.
     """
     client = create_client(settings.supabase_url, settings.supabase_anon_key)
-    client.postgrest.auth(_supabase_user_jwt(user_id))
+    token = jwt_token if jwt_token is not None else _supabase_user_jwt(user_id)
+    client.postgrest.auth(token)
     return client
 
 
@@ -67,26 +74,9 @@ def anon_client() -> Client:
     return create_client(settings.supabase_url, settings.supabase_anon_key)
 
 
-def _table(user_id: str, name: str) -> Any:
+def _table(user_id: str, jwt_token: str | None, name: str) -> Any:
     """Untyped query builder for a user-scoped client — typing escape hatch."""
-    return user_client(user_id).table(name)
-
-
-# ---------------------------------------------------------------------------
-# connector tokens (used by the auth verifier)
-# ---------------------------------------------------------------------------
-def lookup_connector_token(token: str) -> dict[str, Any] | None:
-    """Resolve a bearer token to its user via the security-definer RPC.
-
-    The RPC returns the matching ``user_id`` (uuid) directly, or ``NULL``
-    when the token is unknown. We wrap it in the legacy ``{user_id, token}``
-    dict shape so ``mcp/auth.py`` callers don't change.
-    """
-    res = anon_client().rpc("lookup_connector_token", {"p_token": token}).execute()
-    user_id = res.data
-    if not user_id:
-        return None
-    return {"user_id": str(user_id), "token": token}
+    return user_client(user_id, jwt_token).table(name)
 
 
 # ---------------------------------------------------------------------------
@@ -94,6 +84,7 @@ def lookup_connector_token(token: str) -> dict[str, Any] | None:
 # ---------------------------------------------------------------------------
 def insert_entry(
     user_id: str,
+    jwt_token: str | None,
     date: str,
     summary: str,
     mood: str | None = None,
@@ -106,16 +97,18 @@ def insert_entry(
         "mood": mood,
         "transcript": transcript,
     }
-    res = _table(user_id, "entries").insert(payload).execute()
+    res = _table(user_id, jwt_token, "entries").insert(payload).execute()
     rows = res.data or []
     if not rows:
         raise RuntimeError("insert_entry returned no row")
     return str(rows[0]["id"])
 
 
-def get_entry_by_id(user_id: str, entry_id: str) -> dict[str, Any] | None:
+def get_entry_by_id(
+    user_id: str, jwt_token: str | None, entry_id: str
+) -> dict[str, Any] | None:
     res = (
-        _table(user_id, "entries")
+        _table(user_id, jwt_token, "entries")
         .select("*")
         .eq("user_id", user_id)
         .eq("id", entry_id)
@@ -126,9 +119,11 @@ def get_entry_by_id(user_id: str, entry_id: str) -> dict[str, Any] | None:
     return rows[0] if rows else None
 
 
-def get_entry_by_date(user_id: str, date: str) -> dict[str, Any] | None:
+def get_entry_by_date(
+    user_id: str, jwt_token: str | None, date: str
+) -> dict[str, Any] | None:
     res = (
-        _table(user_id, "entries")
+        _table(user_id, jwt_token, "entries")
         .select("*")
         .eq("user_id", user_id)
         .eq("date", date)
@@ -140,9 +135,11 @@ def get_entry_by_date(user_id: str, date: str) -> dict[str, Any] | None:
     return rows[0] if rows else None
 
 
-def list_recent_entries(user_id: str, limit: int = 10) -> list[dict[str, Any]]:
+def list_recent_entries(
+    user_id: str, jwt_token: str | None, limit: int = 10
+) -> list[dict[str, Any]]:
     res = (
-        _table(user_id, "entries")
+        _table(user_id, jwt_token, "entries")
         .select("id,date,summary,mood,created_at")
         .eq("user_id", user_id)
         .order("date", desc=True)
@@ -155,8 +152,14 @@ def list_recent_entries(user_id: str, limit: int = 10) -> list[dict[str, Any]]:
 # ---------------------------------------------------------------------------
 # embeddings + semantic search
 # ---------------------------------------------------------------------------
-def insert_embedding(user_id: str, entry_id: str, embedding: list[float], content: str) -> None:
-    _table(user_id, "entry_embeddings").insert(
+def insert_embedding(
+    user_id: str,
+    jwt_token: str | None,
+    entry_id: str,
+    embedding: list[float],
+    content: str,
+) -> None:
+    _table(user_id, jwt_token, "entry_embeddings").insert(
         {
             "entry_id": entry_id,
             "user_id": user_id,
@@ -167,10 +170,13 @@ def insert_embedding(user_id: str, entry_id: str, embedding: list[float], conten
 
 
 def match_entries(
-    user_id: str, query_embedding: list[float], limit: int = 5
+    user_id: str,
+    jwt_token: str | None,
+    query_embedding: list[float],
+    limit: int = 5,
 ) -> list[dict[str, Any]]:
     res = (
-        user_client(user_id)
+        user_client(user_id, jwt_token)
         .rpc(
             "match_entries",
             {"query_embedding": query_embedding, "match_count": limit},
@@ -184,10 +190,12 @@ def match_entries(
 # ---------------------------------------------------------------------------
 # patterns
 # ---------------------------------------------------------------------------
-def find_pattern_by_name(user_id: str, name: str) -> dict[str, Any] | None:
+def find_pattern_by_name(
+    user_id: str, jwt_token: str | None, name: str
+) -> dict[str, Any] | None:
     # case-insensitive match; PostgREST `ilike` filter
     res = (
-        _table(user_id, "patterns")
+        _table(user_id, jwt_token, "patterns")
         .select("*")
         .eq("user_id", user_id)
         .ilike("name", name)
@@ -198,21 +206,27 @@ def find_pattern_by_name(user_id: str, name: str) -> dict[str, Any] | None:
     return rows[0] if rows else None
 
 
-def list_patterns(user_id: str, active_since: str | None = None) -> list[dict[str, Any]]:
-    q = _table(user_id, "patterns").select("*").eq("user_id", user_id)
+def list_patterns(
+    user_id: str, jwt_token: str | None, active_since: str | None = None
+) -> list[dict[str, Any]]:
+    q = _table(user_id, jwt_token, "patterns").select("*").eq("user_id", user_id)
     if active_since is not None:
         q = q.gte("last_seen_at", active_since)
     res = q.order("last_seen_at", desc=True).execute()
     return list(res.data or [])
 
 
-def get_pattern(user_id: str, name_or_id: str) -> dict[str, Any] | None:
+def get_pattern(
+    user_id: str, jwt_token: str | None, name_or_id: str
+) -> dict[str, Any] | None:
+    from uuid import UUID
+
     try:
         UUID(name_or_id)
     except ValueError:
-        return find_pattern_by_name(user_id, name_or_id)
+        return find_pattern_by_name(user_id, jwt_token, name_or_id)
     res = (
-        _table(user_id, "patterns")
+        _table(user_id, jwt_token, "patterns")
         .select("*")
         .eq("user_id", user_id)
         .eq("id", name_or_id)
@@ -225,6 +239,7 @@ def get_pattern(user_id: str, name_or_id: str) -> dict[str, Any] | None:
 
 def insert_pattern(
     user_id: str,
+    jwt_token: str | None,
     name: str,
     typical_thoughts: str | None = None,
     typical_emotions: str | None = None,
@@ -241,7 +256,7 @@ def insert_pattern(
         "typical_behaviors": typical_behaviors,
         "typical_sensations": typical_sensations,
     }
-    res = _table(user_id, "patterns").insert(payload).execute()
+    res = _table(user_id, jwt_token, "patterns").insert(payload).execute()
     rows = res.data or []
     if not rows:
         raise RuntimeError("insert_pattern returned no row")
@@ -249,12 +264,15 @@ def insert_pattern(
 
 
 def update_pattern_seen(
-    user_id: str, pattern_id: str, last_seen_at: str | None = None
+    user_id: str,
+    jwt_token: str | None,
+    pattern_id: str,
+    last_seen_at: str | None = None,
 ) -> None:
     last_seen = last_seen_at or datetime.utcnow().isoformat()
     # Read-then-write because PostgREST doesn't support raw SQL increments.
     res = (
-        _table(user_id, "patterns")
+        _table(user_id, jwt_token, "patterns")
         .select("occurrence_count")
         .eq("id", pattern_id)
         .limit(1)
@@ -262,7 +280,7 @@ def update_pattern_seen(
     )
     rows = res.data or []
     current = int(rows[0]["occurrence_count"]) if rows else 0
-    _table(user_id, "patterns").update(
+    _table(user_id, jwt_token, "patterns").update(
         {"last_seen_at": last_seen, "occurrence_count": current + 1}
     ).eq("id", pattern_id).execute()
 
@@ -272,6 +290,7 @@ def update_pattern_seen(
 # ---------------------------------------------------------------------------
 def insert_occurrence(
     user_id: str,
+    jwt_token: str | None,
     pattern_id: str,
     entry_id: str,
     date: str,
@@ -296,7 +315,7 @@ def insert_occurrence(
         "trigger": trigger,
         "notes": notes,
     }
-    res = _table(user_id, "pattern_occurrences").insert(payload).execute()
+    res = _table(user_id, jwt_token, "pattern_occurrences").insert(payload).execute()
     rows = res.data or []
     if not rows:
         raise RuntimeError("insert_occurrence returned no row")
@@ -304,10 +323,13 @@ def insert_occurrence(
 
 
 def list_occurrences(
-    user_id: str, pattern_id: str, since: str | None = None
+    user_id: str,
+    jwt_token: str | None,
+    pattern_id: str,
+    since: str | None = None,
 ) -> list[dict[str, Any]]:
     q = (
-        _table(user_id, "pattern_occurrences")
+        _table(user_id, jwt_token, "pattern_occurrences")
         .select("*")
         .eq("user_id", user_id)
         .eq("pattern_id", pattern_id)
@@ -318,9 +340,11 @@ def list_occurrences(
     return list(res.data or [])
 
 
-def list_occurrences_for_entry(user_id: str, entry_id: str) -> list[dict[str, Any]]:
+def list_occurrences_for_entry(
+    user_id: str, jwt_token: str | None, entry_id: str
+) -> list[dict[str, Any]]:
     res = (
-        _table(user_id, "pattern_occurrences")
+        _table(user_id, jwt_token, "pattern_occurrences")
         .select("*")
         .eq("user_id", user_id)
         .eq("entry_id", entry_id)
@@ -328,6 +352,32 @@ def list_occurrences_for_entry(user_id: str, entry_id: str) -> list[dict[str, An
         .execute()
     )
     return list(res.data or [])
+
+
+# ---------------------------------------------------------------------------
+# auth.users metadata (GoTrue self-service)
+# ---------------------------------------------------------------------------
+async def update_user_metadata(
+    jwt_token: str, metadata: dict[str, Any]
+) -> dict[str, Any]:
+    """Self-service metadata update via GoTrue's PUT /auth/v1/user.
+
+    GoTrue's user-side endpoint expects ``{"data": {...}}`` (NOT
+    ``{"user_metadata": {...}}``). Returns the merged ``user_metadata`` from
+    the response so callers get the persisted state, not a local copy.
+    """
+    async with httpx.AsyncClient(timeout=10.0) as http:
+        resp = await http.put(
+            f"{settings.supabase_url.rstrip('/')}/auth/v1/user",
+            headers={
+                "apikey": settings.supabase_anon_key,
+                "Authorization": f"Bearer {jwt_token}",
+            },
+            json={"data": metadata},
+        )
+    resp.raise_for_status()
+    data = resp.json()
+    return cast(dict[str, Any], data.get("user_metadata") or {})
 
 
 __all__ = [
@@ -344,8 +394,8 @@ __all__ = [
     "list_occurrences_for_entry",
     "list_patterns",
     "list_recent_entries",
-    "lookup_connector_token",
     "match_entries",
     "update_pattern_seen",
+    "update_user_metadata",
     "user_client",
 ]

@@ -3,6 +3,21 @@ set -euo pipefail
 
 echo "=== Kindred gates ==="
 
+# Shared lib (must run first so subsequent backends can import it)
+if [ -d "lib" ]; then
+  echo "--- lib: install ---"
+  pip install -q -e ./lib
+  echo "--- lib: lint ---"
+  cd lib
+  pip install -q -r requirements-dev.txt
+  ruff check .
+  echo "--- lib: typecheck ---"
+  mypy .
+  echo "--- lib: test ---"
+  pytest -q
+  cd ..
+fi
+
 # MCP server
 if [ -d "mcp" ]; then
   echo "--- mcp: lint ---"
@@ -43,9 +58,9 @@ fi
 
 echo "--- service-role boundary check (#44) ---"
 # Per #44, service_role / service_client must not appear in request-handling
-# code (mcp/, web/backend/). Tests legitimately reference them for historical
-# context so are excluded.
-if grep -rn --include='*.py' --exclude-dir=tests -E 'service_role|service_client' mcp/ web/backend/; then
+# code (mcp/, web/backend/, lib/). Tests legitimately reference them for
+# historical context so are excluded.
+if grep -rn --include='*.py' --exclude-dir=tests -E 'service_role|service_client' mcp/ web/backend/ lib/; then
   echo "FAIL: service_role / service_client reference found in request-handling code."
   echo "      Per #44, these are only allowed under scripts/ and supabase/."
   exit 1

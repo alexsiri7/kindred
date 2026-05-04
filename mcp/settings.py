@@ -1,18 +1,7 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from lib.settings import CoreSettings
 
 
-class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore", case_sensitive=False)
-
-    supabase_url: str = ""
-
-    requesty_api_key: str = ""
-    requesty_base_url: str = "https://router.requesty.ai/v1"
-
-    sentry_dsn: str = ""
-
-    supabase_anon_key: str = ""
-    supabase_jwt_secret: str = ""
+class Settings(CoreSettings):
     mcp_base_url: str = ""
     secret_key: str = ""
 

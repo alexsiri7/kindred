@@ -12,9 +12,9 @@ from __future__ import annotations
 from typing import Any, cast
 
 from fastapi import APIRouter, Depends
+from lib import db
 from pydantic import BaseModel
 
-import db
 from auth import get_current_user
 
 router = APIRouter(tags=["settings"])
@@ -68,7 +68,7 @@ async def update_settings(
 def export_data(
     user: dict[str, Any] = Depends(get_current_user),
 ) -> dict[str, Any]:
-    client = db.user_client(user["jwt"])
+    client = db.user_client(user["user_id"], user["jwt"])
     entries = client.table("entries").select("*").execute()
     patterns = client.table("patterns").select("*").execute()
     occurrences = client.table("pattern_occurrences").select("*").execute()
@@ -86,5 +86,5 @@ def delete_account(
 ) -> dict[str, str]:
     # The security-definer RPC deletes auth.users for auth.uid(); FK ON
     # DELETE CASCADE on every user-owned table cleans up app data atomically.
-    db.user_client(user["jwt"]).rpc("delete_my_account").execute()
+    db.user_client(user["user_id"], user["jwt"]).rpc("delete_my_account").execute()
     return {"status": "deleted"}

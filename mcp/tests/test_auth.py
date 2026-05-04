@@ -8,8 +8,9 @@ from typing import Any
 import httpx
 import jwt
 import pytest
+from lib import db
+from lib.services import tokens
 
-import db
 import settings as settings_module
 from auth import ConnectorTokenVerifier, resolve_user_id_from_jwt
 
@@ -19,13 +20,13 @@ USER_ID = "11111111-2222-3333-4444-555555555555"
 
 @pytest.mark.asyncio
 async def test_verify_token_unknown_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(db, "lookup_connector_token", lambda _t: None)
+    monkeypatch.setattr(tokens, "lookup_token", lambda _t: None)
     verifier = ConnectorTokenVerifier()
     assert await verifier.verify_token("does-not-exist") is None
 
 
 @pytest.mark.asyncio
-async def test_lookup_connector_token_rpc_none_propagates(
+async def test_lookup_token_rpc_none_propagates(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Anon RPC returning NULL → verifier returns None (no exception)."""
@@ -42,7 +43,7 @@ async def test_lookup_connector_token_rpc_none_propagates(
             return _RpcChain()
 
     monkeypatch.setattr(db, "anon_client", lambda: _Client())
-    assert db.lookup_connector_token("missing") is None
+    assert tokens.lookup_token("missing") is None
     verifier = ConnectorTokenVerifier()
     assert await verifier.verify_token("missing") is None
 
@@ -53,10 +54,10 @@ async def test_verify_token_known_returns_access_token(
 ) -> None:
     user_id = "11111111-2222-3333-4444-555555555555"
 
-    def _fake_lookup(_t: str) -> dict[str, Any]:
-        return {"user_id": user_id, "token": _t}
+    def _fake_lookup(_t: str) -> str:
+        return user_id
 
-    monkeypatch.setattr(db, "lookup_connector_token", _fake_lookup)
+    monkeypatch.setattr(tokens, "lookup_token", _fake_lookup)
     verifier = ConnectorTokenVerifier()
     token = await verifier.verify_token("good-token")
     assert token is not None

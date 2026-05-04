@@ -1,13 +1,12 @@
-"""Tests for the 8 MCP tools — patched db + embeddings."""
+"""Tests for the 8 MCP tools — patched lib.db + lib.embeddings."""
 
 from __future__ import annotations
 
 from typing import Any
 
 import pytest
+from lib import db, embeddings
 
-import db
-import embeddings
 from auth import current_user_id
 from tools import entries as entry_tools
 from tools import patterns as pattern_tools
@@ -31,8 +30,11 @@ def _set_user() -> Any:
 async def test_save_entry_inserts_then_embeds(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[str] = []
 
-    def fake_insert_entry(user_id: str, *args: Any, **kw: Any) -> str:
+    def fake_insert_entry(
+        user_id: str, jwt_token: str | None, *args: Any, **kw: Any
+    ) -> str:
         assert user_id == USER_ID
+        assert jwt_token is None
         calls.append("insert_entry")
         return ENTRY_ID
 
@@ -42,7 +44,11 @@ async def test_save_entry_inserts_then_embeds(monkeypatch: pytest.MonkeyPatch) -
         return [0.1, 0.2, 0.3]
 
     def fake_insert_embedding(
-        user_id: str, entry_id: str, vector: list[float], content: str
+        user_id: str,
+        jwt_token: str | None,
+        entry_id: str,
+        vector: list[float],
+        content: str,
     ) -> None:
         assert user_id == USER_ID
         assert entry_id == ENTRY_ID
@@ -60,7 +66,7 @@ async def test_save_entry_inserts_then_embeds(monkeypatch: pytest.MonkeyPatch) -
 
 
 async def test_get_entry_requires_exactly_one_arg(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(db, "get_entry_by_id", lambda u, i: {"id": i})
+    monkeypatch.setattr(db, "get_entry_by_id", lambda u, j, i: {"id": i})
     with pytest.raises(ValueError):
         await entry_tools.get_entry()
     with pytest.raises(ValueError):
@@ -68,7 +74,7 @@ async def test_get_entry_requires_exactly_one_arg(monkeypatch: pytest.MonkeyPatc
 
 
 async def test_get_entry_by_id(monkeypatch: pytest.MonkeyPatch) -> None:
-    def fake(user_id: str, entry_id: str) -> dict[str, Any]:
+    def fake(user_id: str, jwt_token: str | None, entry_id: str) -> dict[str, Any]:
         assert user_id == USER_ID
         return {"id": entry_id, "summary": "hi"}
 
@@ -78,7 +84,7 @@ async def test_get_entry_by_id(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 async def test_list_recent_entries(monkeypatch: pytest.MonkeyPatch) -> None:
-    def fake(user_id: str, limit: int) -> list[dict[str, Any]]:
+    def fake(user_id: str, jwt_token: str | None, limit: int) -> list[dict[str, Any]]:
         assert user_id == USER_ID
         assert limit == 3
         return [{"id": "a"}, {"id": "b"}, {"id": "c"}]
@@ -95,7 +101,9 @@ async def test_search_entries_embeds_then_matches(monkeypatch: pytest.MonkeyPatc
         seen["embed"] = text
         return [0.5] * 3
 
-    def fake_match(user_id: str, vector: list[float], limit: int) -> list[dict[str, Any]]:
+    def fake_match(
+        user_id: str, jwt_token: str | None, vector: list[float], limit: int
+    ) -> list[dict[str, Any]]:
         seen["match"] = (user_id, vector, limit)
         return [{"entry_id": ENTRY_ID, "similarity": 0.9, "content": "x"}]
 
@@ -115,23 +123,37 @@ async def test_log_occurrence_creates_pattern_when_missing(
 ) -> None:
     inserted: dict[str, Any] = {}
 
-    def fake_find(user_id: str, name: str) -> dict[str, Any] | None:
+    def fake_find(
+        user_id: str, jwt_token: str | None, name: str
+    ) -> dict[str, Any] | None:
         return None
 
     def fake_insert_pattern(
-        user_id: str, name: str, t: str, e: str, b: str, s: str, *a: Any, **kw: Any
+        user_id: str,
+        jwt_token: str | None,
+        name: str,
+        t: str,
+        e: str,
+        b: str,
+        s: str,
+        *a: Any,
+        **kw: Any,
     ) -> str:
         inserted["name"] = name
         inserted["typical"] = (t, e, b, s)
         return PATTERN_ID
 
-    def fake_get_entry(user_id: str, entry_id: str) -> dict[str, Any]:
+    def fake_get_entry(
+        user_id: str, jwt_token: str | None, entry_id: str
+    ) -> dict[str, Any]:
         return {"id": entry_id, "date": "2026-05-01"}
 
     def fake_insert_occ(*args: Any, **kw: Any) -> str:
         return OCCURRENCE_ID
 
-    def fake_update(user_id: str, *args: Any, **kw: Any) -> None:
+    def fake_update(
+        user_id: str, jwt_token: str | None, *args: Any, **kw: Any
+    ) -> None:
         assert user_id == USER_ID
         inserted["seen"] = True
 
@@ -174,7 +196,9 @@ async def test_log_occurrence_rejects_out_of_range_intensity() -> None:
 
 
 async def test_list_patterns(monkeypatch: pytest.MonkeyPatch) -> None:
-    def fake(user_id: str, since: str | None) -> list[dict[str, Any]]:
+    def fake(
+        user_id: str, jwt_token: str | None, since: str | None
+    ) -> list[dict[str, Any]]:
         assert user_id == USER_ID
         return [{"id": PATTERN_ID, "name": "Sunday dread"}]
 
@@ -184,7 +208,7 @@ async def test_list_patterns(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 async def test_get_pattern(monkeypatch: pytest.MonkeyPatch) -> None:
-    def fake(user_id: str, name_or_id: str) -> dict[str, Any]:
+    def fake(user_id: str, jwt_token: str | None, name_or_id: str) -> dict[str, Any]:
         assert user_id == USER_ID
         return {"id": PATTERN_ID, "name": name_or_id}
 
@@ -194,10 +218,17 @@ async def test_get_pattern(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 async def test_list_occurrences(monkeypatch: pytest.MonkeyPatch) -> None:
-    def fake_find(user_id: str, name: str) -> dict[str, Any]:
+    def fake_find(
+        user_id: str, jwt_token: str | None, name: str
+    ) -> dict[str, Any]:
         return {"id": PATTERN_ID, "name": name}
 
-    def fake_list(user_id: str, pattern_id: str, since: str | None) -> list[dict[str, Any]]:
+    def fake_list(
+        user_id: str,
+        jwt_token: str | None,
+        pattern_id: str,
+        since: str | None,
+    ) -> list[dict[str, Any]]:
         assert user_id == USER_ID
         assert pattern_id == PATTERN_ID
         return [{"id": OCCURRENCE_ID}]
