@@ -29,11 +29,7 @@ class SettingsPatch(BaseModel):
     crisis_disclaimer_acknowledged_at: str | None = None
 
 
-@router.get("/settings")
-def get_settings(
-    user: dict[str, Any] = Depends(get_current_user),
-) -> dict[str, Any]:
-    meta = cast(dict[str, Any], user.get("user_metadata") or {})
+def _settings_response(meta: dict[str, Any]) -> dict[str, Any]:
     return {
         "timezone": meta.get("timezone"),
         "transcript_enabled": meta.get("transcript_enabled", True),
@@ -43,20 +39,20 @@ def get_settings(
     }
 
 
+@router.get("/settings")
+def get_settings(
+    user: dict[str, Any] = Depends(get_current_user),
+) -> dict[str, Any]:
+    return _settings_response(cast(dict[str, Any], user.get("user_metadata") or {}))
+
+
 @router.patch("/settings")
 async def update_settings(
     patch: SettingsPatch,
     user: dict[str, Any] = Depends(get_current_user),
 ) -> dict[str, Any]:
-    current = dict(cast(dict[str, Any], user.get("user_metadata") or {}))
-    if patch.timezone is not None:
-        current["timezone"] = patch.timezone
-    if patch.transcript_enabled is not None:
-        current["transcript_enabled"] = patch.transcript_enabled
-    if patch.crisis_disclaimer_acknowledged_at is not None:
-        current["crisis_disclaimer_acknowledged_at"] = (
-            patch.crisis_disclaimer_acknowledged_at
-        )
+    meta = cast(dict[str, Any], user.get("user_metadata") or {})
+    current = {**meta, **patch.model_dump(exclude_none=True)}
     try:
         merged = await db.update_user_metadata(user["jwt"], current)
     except httpx.HTTPStatusError as exc:
@@ -77,13 +73,7 @@ async def update_settings(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Auth server unreachable",
         ) from exc
-    return {
-        "timezone": merged.get("timezone"),
-        "transcript_enabled": merged.get("transcript_enabled", True),
-        "crisis_disclaimer_acknowledged_at": merged.get(
-            "crisis_disclaimer_acknowledged_at"
-        ),
-    }
+    return _settings_response(merged)
 
 
 @router.get("/export")
