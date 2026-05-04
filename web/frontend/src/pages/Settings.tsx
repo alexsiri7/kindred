@@ -181,6 +181,14 @@ function TrashIcon() {
   )
 }
 
+function tokenStatus(
+  t: ConnectorTokenSummary,
+): 'revoked' | 'expired' | 'active' {
+  if (t.revoked_at) return 'revoked'
+  if (t.expires_at && new Date(t.expires_at) < new Date()) return 'expired'
+  return 'active'
+}
+
 export function Settings() {
   const [settings, setSettings] = useState<UserSettings | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -189,6 +197,9 @@ export function Settings() {
     ConnectorTokenSummary[]
   >([])
   const [reissued, setReissued] = useState<ConnectorToken | null>(null)
+  // Section-local error so a token-section failure doesn't blow away the
+  // whole Settings page (top-level `error` replaces the entire render).
+  const [tokensError, setTokensError] = useState<string | null>(null)
 
   useEffect(() => {
     api
@@ -213,7 +224,7 @@ export function Settings() {
     api
       .get<ConnectorTokenSummary[]>('/connect/tokens')
       .then(setConnectorTokens)
-      .catch(() => {})
+      .catch((e: Error) => setTokensError(e.message))
   }, [])
 
   const refreshTokens = () =>
@@ -226,10 +237,18 @@ export function Settings() {
       )
     )
       return
-    await api.post(`/connect/tokens/${id}/revoke`)
-    await refreshTokens()
+    setTokensError(null)
+    try {
+      await api.post(`/connect/tokens/${id}/revoke`)
+      await refreshTokens()
+    } catch (e) {
+      setTokensError((e as Error).message)
+    }
   }
 
+  // Mint-first / revoke-second: if the second call fails, the user still
+  // has a working token (two active rather than zero). Out-of-scope to add
+  // an atomic rotate endpoint; this ordering is the safer non-atomic choice.
   const reissueToken = async (id: string) => {
     if (
       !window.confirm(
@@ -237,18 +256,17 @@ export function Settings() {
       )
     )
       return
-    await api.post(`/connect/tokens/${id}/revoke`)
-    const next = await api.post<ConnectorToken>('/connect/token')
-    setReissued(next)
-    await refreshTokens()
-  }
-
-  const tokenStatus = (
-    t: ConnectorTokenSummary,
-  ): 'revoked' | 'expired' | 'active' => {
-    if (t.revoked_at) return 'revoked'
-    if (t.expires_at && new Date(t.expires_at) < new Date()) return 'expired'
-    return 'active'
+    setTokensError(null)
+    try {
+      const next = await api.post<ConnectorToken>('/connect/token')
+      setReissued(next)
+      await api.post(`/connect/tokens/${id}/revoke`)
+      await refreshTokens()
+    } catch (e) {
+      setTokensError((e as Error).message)
+      // Best-effort refresh so the UI reflects whatever did succeed.
+      await refreshTokens().catch(() => {})
+    }
   }
 
   const save = async (patch: Partial<UserSettings>) => {
@@ -355,6 +373,18 @@ export function Settings() {
           </p>
         </div>
         <div className="set-control" style={{ width: '100%' }}>
+          {tokensError && (
+            <p
+              role="alert"
+              style={{
+                color: 'var(--rust)',
+                fontSize: 13,
+                margin: '0 0 8px',
+              }}
+            >
+              Couldn&apos;t load tokens: {tokensError}
+            </p>
+          )}
           {connectorTokens.length === 0 ? (
             <p style={{ color: 'var(--ink-3)', fontSize: 13 }}>
               No tokens yet.

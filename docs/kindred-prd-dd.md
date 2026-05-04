@@ -78,7 +78,7 @@ The current MCP spec supports OAuth 2.1 between MCP clients and servers. When a 
 
 On every MCP tool call, the server validates the bearer token, resolves the Supabase user, and queries Postgres with that user's identity in scope (so RLS applies).
 
-**Fallback**: if MCP OAuth turns out to be more setup than is worth doing on day one, ship a connector-token flow instead — the web app has a `/connect` page that mints a long-lived token bound to the user's `user_id`, the user pastes it into their MCP client's connector config (e.g. Claude.ai's), the MCP server validates it on each call. Document this fallback. Plan to migrate to proper OAuth in step 8 of the build order.
+**Fallback**: if MCP OAuth turns out to be more setup than is worth doing on day one, ship a connector-token flow instead — the web app has a `/connect` page that mints a lifecycle-managed token (90-day expiry by default; revocable from `/settings`) bound to the user's `user_id`, the user pastes it into their MCP client's connector config (e.g. Claude.ai's), the MCP server validates it on each call. Document this fallback. Plan to migrate to proper OAuth in step 8 of the build order.
 
 ---
 
@@ -281,10 +281,10 @@ Read-only. Browser-only. The web app exists to give the user a window onto their
 | `/patterns` | List of named patterns, sorted by `last_seen_at` |
 | `/patterns/:id` | Pattern details, all occurrences chronologically, the four "typical" quadrants |
 | `/search?q=...` | Semantic search results across entries |
-| `/settings` | Timezone, transcript on/off, export all data, delete account |
-| `/connect` | "Connect Kindred to your AI assistant" page — mints connector token + per-client setup tabs (Claude Projects, ChatGPT, Gemini Gems) |
+| `/settings` | Timezone, transcript on/off, export all data, delete account, connector tokens (list, revoke, revoke-and-reissue) |
+| `/connect` | "Connect Kindred to your AI assistant" page — mints connector token (with expiry + password-handling warning) + per-client setup tabs (Claude Projects, ChatGPT, Gemini Gems) |
 
-**No editing. No write paths.** The only mutations the web app exposes: account deletion, data export, settings toggles. Entries and patterns are written exclusively through the MCP server, which means exclusively through the journaling conversation. One write path.
+**No editing of journal data. One write path for entries + patterns.** The only mutations the web app exposes are administrative: account deletion, data export, settings toggles, and connector-token lifecycle (mint at `/connect`, revoke at `/settings`). Entries and patterns are written exclusively through the MCP server, which means exclusively through the journaling conversation.
 
 ---
 

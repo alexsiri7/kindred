@@ -7,7 +7,7 @@ vi.mock('../../api/client', () => ({
   api: {
     post: vi.fn(async () => ({
       token: 'kdr_test_token',
-      created_at: null,
+      created_at: '2026-05-04T00:00:00Z',
       expires_at: null,
     })),
   },
@@ -85,15 +85,22 @@ describe('Connect', () => {
 
   it('renders the password warning banner above the token reveal', () => {
     renderConnect()
-    expect(
-      screen.getByText(/treat this token like a password/i),
-    ).toBeInTheDocument()
+    const banner = screen.getByText(/treat this token like a password/i)
+    expect(banner).toBeInTheDocument()
+    // Pin position: the banner must come before the token-reveal code element
+    // in document order so users see the warning before the token value.
+    const tokenReveal = screen.getByText(/kdr_••••••••••••••••••••••••/)
+    // Node.compareDocumentPosition: DOCUMENT_POSITION_FOLLOWING (4) means
+    // tokenReveal follows banner in document order.
+    expect(banner.compareDocumentPosition(tokenReveal)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    )
   })
 
   it('renders the expiry date after minting', async () => {
     ;(api.post as Mock).mockResolvedValueOnce({
       token: 'kdr_x',
-      created_at: null,
+      created_at: '2026-05-04T00:00:00Z',
       expires_at: '2026-08-02T00:00:00Z',
     })
     renderConnect()

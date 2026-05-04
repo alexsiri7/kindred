@@ -95,6 +95,25 @@ def test_lookup_token_returns_none_when_unknown(
     assert tokens.lookup_token("nope") is None
 
 
+def test_lookup_token_contract_documented(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pin the Python contract: NULL ≡ unknown / revoked / expired.
+
+    The actual SQL filter (``revoked_at is null and (expires_at is null or
+    expires_at > now())``) and the ``last_used_at`` UPDATE inside the CTE
+    are not exercised here — there is no DB integration harness in this
+    repo. A regression that drops the UPDATE, flips ``>`` to ``>=``, or
+    breaks the expiry predicate would pass every existing test green.
+    Track DB-level testing for migration 003 in a follow-up issue.
+    """
+    fake_anon = MagicMock()
+    fake_anon.rpc.return_value.execute.return_value = MagicMock(data=None)
+    monkeypatch.setattr(db, "anon_client", lambda: fake_anon)
+    assert tokens.lookup_token("any-bad-token") is None
+    fake_anon.rpc.assert_called_once_with(
+        "lookup_connector_token", {"p_token": "any-bad-token"}
+    )
+
+
 def test_list_tokens_filters_by_user_and_returns_rows(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -115,7 +134,11 @@ def test_list_tokens_filters_by_user_and_returns_rows(
         response = MagicMock()
         response.data = rows
 
-        select = table.select.return_value
+        def _select(columns: str) -> MagicMock:
+            chain_calls["select_columns"] = columns
+            return select
+
+        select = MagicMock()
         eq = select.eq.return_value
 
         def _eq(field: str, value: Any) -> MagicMock:
@@ -124,27 +147,56 @@ def test_list_tokens_filters_by_user_and_returns_rows(
             return eq
 
         select.eq.side_effect = _eq
-        eq.order.return_value.execute.return_value = response
+
+        def _order(column: str, *, desc: bool = False) -> MagicMock:
+            chain_calls["order_column"] = column
+            chain_calls["order_desc"] = desc
+            return order
+
+        order = MagicMock()
+        order.execute.return_value = response
+        eq.order.side_effect = _order
+        table.select.side_effect = _select
         sb.table.return_value = table
         return sb
 
     monkeypatch.setattr(db, "user_client", _build_user_client)
     out = tokens.list_tokens(USER_ID, "fake-jwt")
     assert out == rows
-    assert chain_calls == {"eq_field": "user_id", "eq_value": USER_ID}
+    # Pin the safe-column projection — the raw ``token`` must never be selected.
+    assert (
+        chain_calls["select_columns"]
+        == "id, created_at, last_used_at, expires_at, revoked_at"
+    )
+    assert "token" not in chain_calls["select_columns"]
+    assert chain_calls["eq_field"] == "user_id"
+    assert chain_calls["eq_value"] == USER_ID
+    assert chain_calls["order_column"] == "created_at"
+    assert chain_calls["order_desc"] is True
 
 
 def test_revoke_token_updates_revoked_at(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: dict[str, Any] = {}
-    updated_row = {"id": TOKEN_ID, "revoked_at": "2026-05-04T12:00:00Z"}
+    # Mirror PostgREST's actual return shape under ``Prefer: return=representation``:
+    # the full row, including the raw ``token`` column. The service must
+    # filter this out before returning so it never reaches the caller.
+    full_row = {
+        "id": TOKEN_ID,
+        "user_id": USER_ID,
+        "token": "kdr_LEAKY_RAW_TOKEN_VALUE",
+        "created_at": "2026-04-01T00:00:00Z",
+        "last_used_at": None,
+        "expires_at": "2026-07-01T00:00:00Z",
+        "revoked_at": "2026-05-04T12:00:00Z",
+    }
 
     def _build_user_client(_uid: str, _jwt: str | None = None) -> MagicMock:
         sb = MagicMock()
         table = MagicMock()
         response = MagicMock()
-        response.data = [updated_row]
+        response.data = [full_row]
 
         def _update(payload: dict[str, Any]) -> MagicMock:
             captured["payload"] = payload
@@ -176,7 +228,12 @@ def test_revoke_token_updates_revoked_at(
 
     monkeypatch.setattr(db, "user_client", _build_user_client)
     out = tokens.revoke_token(USER_ID, "fake-jwt", TOKEN_ID)
-    assert out == updated_row
+    # Critical: the raw token value must never be returned to the caller,
+    # even though PostgREST echoed it back in the representation response.
+    assert "token" not in out
+    assert "user_id" not in out
+    assert out["id"] == TOKEN_ID
+    assert out["revoked_at"] == "2026-05-04T12:00:00Z"
     assert "revoked_at" in captured["payload"]
     # ISO-format timestamp:
     datetime.fromisoformat(captured["payload"]["revoked_at"])
@@ -203,3 +260,48 @@ def test_revoke_token_raises_when_no_row_updated(
     monkeypatch.setattr(db, "user_client", _build_user_client)
     with pytest.raises(LookupError):
         tokens.revoke_token(USER_ID, "fake-jwt", TOKEN_ID)
+
+
+def test_revoke_token_overwrites_already_revoked(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pin chosen behaviour: revoking an already-revoked token overwrites
+    ``revoked_at`` with the new ``now()`` rather than no-opping. This is a
+    side-effect of update-by-id: the row exists, the predicate matches, so
+    the timestamp is rewritten. Documented here so a reader doesn't have
+    to re-derive it from the ``.update().eq().eq()`` chain.
+    """
+    captured: dict[str, Any] = {}
+    already_revoked_row = {
+        "id": TOKEN_ID,
+        "user_id": USER_ID,
+        "token": "kdr_RAW",
+        "created_at": "2026-04-01T00:00:00Z",
+        "last_used_at": None,
+        "expires_at": "2026-07-01T00:00:00Z",
+        "revoked_at": "2026-05-04T12:00:00Z",
+    }
+
+    def _build_user_client(_uid: str, _jwt: str | None = None) -> MagicMock:
+        sb = MagicMock()
+        table = MagicMock()
+        response = MagicMock()
+        response.data = [already_revoked_row]
+
+        def _update(payload: dict[str, Any]) -> MagicMock:
+            captured["payload"] = payload
+            return chain
+
+        chain = MagicMock()
+        chain.eq.return_value.eq.return_value.execute.return_value = response
+        table.update.side_effect = _update
+        sb.table.return_value = table
+        return sb
+
+    monkeypatch.setattr(db, "user_client", _build_user_client)
+    out = tokens.revoke_token(USER_ID, "fake-jwt", TOKEN_ID)
+    assert "revoked_at" in captured["payload"]
+    # Returned row carries a revoked_at — overwrite, not raise.
+    assert out["revoked_at"] is not None
+    # And still no raw token leaks even on the already-revoked path.
+    assert "token" not in out

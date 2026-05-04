@@ -43,6 +43,15 @@ const REVOKED_TOKEN: ConnectorTokenSummary = {
   revoked_at: '2026-04-20T09:00:00Z',
 }
 
+const EXPIRED_TOKEN: ConnectorTokenSummary = {
+  id: 'tok-expired-1',
+  created_at: '2025-01-01T00:00:00Z',
+  last_used_at: null,
+  // Safely in the past so the branch fires regardless of test clock.
+  expires_at: '2025-04-01T00:00:00Z',
+  revoked_at: null,
+}
+
 const mockEndpoints = (tokens: ConnectorTokenSummary[] = []) => {
   apiGet.mockImplementation(async (path: string) => {
     if (path === '/settings') return SETTINGS_RESPONSE
@@ -95,6 +104,30 @@ describe('Settings — connector tokens section', () => {
     ).not.toBeInTheDocument()
   })
 
+  it('renders an expired token row without action buttons', async () => {
+    mockEndpoints([EXPIRED_TOKEN])
+    render(<Settings />)
+    expect(await screen.findByText(/Expired/)).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /^Revoke$/ }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /Revoke and reissue/i }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('treats a token expiring in the future as active', async () => {
+    const ALMOST_EXPIRED: ConnectorTokenSummary = {
+      ...ACTIVE_TOKEN,
+      id: 'tok-active-future',
+      // Future expiry — must render as Active.
+      expires_at: new Date(Date.now() + 3600_000).toISOString(),
+    }
+    mockEndpoints([ALMOST_EXPIRED])
+    render(<Settings />)
+    expect(await screen.findByText(/Active/)).toBeInTheDocument()
+  })
+
   it('revokes a token and refreshes the list', async () => {
     mockEndpoints([ACTIVE_TOKEN])
     apiPost.mockResolvedValueOnce({})
@@ -118,16 +151,16 @@ describe('Settings — connector tokens section', () => {
     })
   })
 
-  it('reissues a token and surfaces the new value', async () => {
+  it('reissues a token by minting first, then revoking, then surfacing the new value', async () => {
     mockEndpoints([ACTIVE_TOKEN])
     apiPost
-      .mockResolvedValueOnce({}) // revoke
+      // mint runs first so a partial failure leaves the user with a working token
       .mockResolvedValueOnce({
-        // mint
         token: 'kdr_new_token_value_12345',
         created_at: '2026-05-04T00:00:00Z',
         expires_at: '2026-08-02T00:00:00Z',
       })
+      .mockResolvedValueOnce({}) // revoke
 
     render(<Settings />)
     const reissueButton = await screen.findByRole('button', {
@@ -137,16 +170,72 @@ describe('Settings — connector tokens section', () => {
     fireEvent.click(reissueButton)
 
     await waitFor(() => {
+      expect(apiPost).toHaveBeenNthCalledWith(1, '/connect/token')
+    })
+    await waitFor(() => {
       expect(apiPost).toHaveBeenNthCalledWith(
-        1,
+        2,
         `/connect/tokens/${ACTIVE_TOKEN.id}/revoke`,
       )
     })
-    await waitFor(() => {
-      expect(apiPost).toHaveBeenNthCalledWith(2, '/connect/token')
-    })
     expect(
       await screen.findByText(/kdr_new_token_value_12345/),
+    ).toBeInTheDocument()
+  })
+
+  it('does nothing when the user cancels the revoke confirmation', async () => {
+    mockEndpoints([ACTIVE_TOKEN])
+    vi.spyOn(window, 'confirm').mockReturnValue(false)
+
+    render(<Settings />)
+    const revokeButton = await screen.findByRole('button', { name: /^Revoke$/ })
+    fireEvent.click(revokeButton)
+
+    // No POST should fire — the confirm() guard is the only safety net for
+    // an irreversible action; pin it.
+    expect(apiPost).not.toHaveBeenCalled()
+  })
+
+  it('does nothing when the user cancels the reissue confirmation', async () => {
+    mockEndpoints([ACTIVE_TOKEN])
+    vi.spyOn(window, 'confirm').mockReturnValue(false)
+
+    render(<Settings />)
+    const reissueButton = await screen.findByRole('button', {
+      name: /Revoke and reissue/i,
+    })
+    fireEvent.click(reissueButton)
+
+    expect(apiPost).not.toHaveBeenCalled()
+  })
+
+  it('surfaces an error message if the initial token fetch fails', async () => {
+    apiGet.mockImplementation(async (path: string) => {
+      if (path === '/settings') return SETTINGS_RESPONSE
+      if (path === '/connect/tokens') throw new Error('502 Bad Gateway')
+      throw new Error(`unexpected GET ${path}`)
+    })
+
+    render(<Settings />)
+    expect(
+      await screen.findByText(/couldn't load tokens/i),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/502 Bad Gateway/)).toBeInTheDocument()
+  })
+
+  it('surfaces an error message if revoking fails', async () => {
+    mockEndpoints([ACTIVE_TOKEN])
+    apiPost.mockRejectedValueOnce(new Error('500 Internal Server Error'))
+
+    render(<Settings />)
+    const revokeButton = await screen.findByRole('button', { name: /^Revoke$/ })
+    fireEvent.click(revokeButton)
+
+    expect(
+      await screen.findByText(/couldn't load tokens/i),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(/500 Internal Server Error/),
     ).toBeInTheDocument()
   })
 })

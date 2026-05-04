@@ -270,6 +270,10 @@ def test_revoke_connector_token(
     body = res.json()
     assert body["id"] == token_id
     assert body["revoked_at"] == "2026-05-04T12:00:00Z"
+    # Regression guard: revoke response must never include the raw token. The
+    # service projects safe columns so PostgREST's `return=representation`
+    # default doesn't leak the bearer value into network logs / DevTools.
+    assert "token" not in body
 
 
 def test_revoke_connector_token_not_found(

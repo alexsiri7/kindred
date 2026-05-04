@@ -27,9 +27,9 @@ def mint_token(user_id: str, jwt_token: str) -> dict[str, Any]:
     set to ``now() + connector_token_ttl_days``.
     """
     token = secrets.token_urlsafe(TOKEN_BYTES)
-    expires_at = datetime.now(UTC) + timedelta(
-        days=lib_settings.connector_token_ttl_days
-    )
+    now = datetime.now(UTC)
+    expires_at = now + timedelta(days=lib_settings.connector_token_ttl_days)
+    expires_at_iso = expires_at.isoformat()
     res = (
         db.user_client(user_id, jwt_token)
         .table("connector_tokens")
@@ -37,7 +37,7 @@ def mint_token(user_id: str, jwt_token: str) -> dict[str, Any]:
             {
                 "user_id": user_id,
                 "token": token,
-                "expires_at": expires_at.isoformat(),
+                "expires_at": expires_at_iso,
             }
         )
         .execute()
@@ -45,10 +45,13 @@ def mint_token(user_id: str, jwt_token: str) -> dict[str, Any]:
     raw: Any = res.data or []
     rows: list[dict[str, Any]] = list(raw)
     row = rows[0] if rows else {}
+    # Fall back to client-computed timestamps if Supabase returns an empty
+    # response shape — the UI relies on these being present to render the
+    # expiry hint, and a None there would mask the write contract.
     return {
         "token": token,
-        "created_at": row.get("created_at"),
-        "expires_at": row.get("expires_at"),
+        "created_at": row.get("created_at") or now.isoformat(),
+        "expires_at": row.get("expires_at") or expires_at_iso,
     }
 
 
@@ -84,6 +87,15 @@ def list_tokens(user_id: str, jwt_token: str) -> list[dict[str, Any]]:
     return list(raw)
 
 
+_SAFE_TOKEN_COLUMNS = (
+    "id",
+    "created_at",
+    "last_used_at",
+    "expires_at",
+    "revoked_at",
+)
+
+
 def revoke_token(user_id: str, jwt_token: str, token_id: str) -> dict[str, Any]:
     """Set ``revoked_at = now()`` on the caller's token.
 
@@ -104,4 +116,8 @@ def revoke_token(user_id: str, jwt_token: str, token_id: str) -> dict[str, Any]:
     rows: list[dict[str, Any]] = list(raw)
     if not rows:
         raise LookupError("token not found")
-    return rows[0]
+    # supabase-py defaults to ``Prefer: return=representation`` so PostgREST
+    # echoes the full row back, including the raw ``token`` value. Defence
+    # in depth: filter to safe columns before returning so the bearer never
+    # lands in API responses, network logs, or browser DevTools.
+    return {k: rows[0].get(k) for k in _SAFE_TOKEN_COLUMNS}

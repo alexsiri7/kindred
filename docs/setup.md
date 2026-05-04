@@ -19,6 +19,24 @@ custom instruction get pasted.
 
 ---
 
+## Token lifecycle
+
+Connector tokens expire 90 days after they're minted. An expired or revoked
+token returns 401 — same response as an unknown one — so the AI client just
+stops working until you reissue.
+
+Manage your tokens at `/app/settings` → **Connector tokens**:
+
+- **Active** tokens show created date, last-used time, and expiry.
+- **Revoke** disables a token immediately (next MCP request → 401).
+- **Revoke and reissue** does both in one step and shows the new token once
+  — copy it into your AI client's connector config before navigating away.
+
+Tip: revoke any token you've pasted into chat, screenshots, or shared docs.
+Anyone with the value can read your journal until you do.
+
+---
+
 ## Claude Projects
 
 ### Add the MCP server
@@ -44,7 +62,11 @@ confirm the assistant calls `save_entry`.
   it again.
 - **AI ignores the one-liner** — paste the contents of `kindred-guide.md`
   directly into the project instructions instead.
-- **Tool calls fail with 401** — token may have rotated; re-mint and update.
+- **Tool calls fail with 401** — the token has expired (default 90-day TTL),
+  been revoked from `/app/settings`, or been replaced by a re-mint. Check
+  the row at `/app/settings` → **Connector tokens**: if it shows Expired or
+  Revoked, use **Revoke and reissue** to mint a replacement and paste the
+  new value into your AI client.
 - **Tool calls fail with 429 / "rate_limited"** — Kindred caps tool calls
   per user per minute (60 total, 10 for `search_entries`) to keep the
   service affordable. Wait the number of seconds in the `retry_after`
@@ -74,7 +96,10 @@ Then say "Let's save this session" and confirm `save_entry` runs.
 
 ### Troubleshooting
 
-- **401 unauthorized** — token may have rotated; re-mint and update the
+- **401 unauthorized** — the token has expired (default 90-day TTL), been
+  revoked from `/app/settings`, or been replaced by a re-mint. Check the
+  row at `/app/settings` → **Connector tokens**: if it shows Expired or
+  Revoked, use **Revoke and reissue** to mint a replacement and update the
   GPT's auth.
 - **Tool calls fail with 429 / "rate_limited"** — Kindred caps tool calls
   per user per minute (60 total, 10 for `search_entries`) to keep the

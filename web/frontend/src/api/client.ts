@@ -99,7 +99,7 @@ export type UserSettings = {
 
 export type ConnectorToken = {
   token: string
-  created_at: string | null
+  created_at: string
   expires_at: string | null
 }
 
