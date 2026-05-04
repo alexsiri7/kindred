@@ -8,9 +8,8 @@ from unittest.mock import MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
+from lib import db, embeddings
 
-import db
-import embeddings
 from auth import get_current_user
 from main import app
 
@@ -58,21 +57,27 @@ def _stub_supabase(table_rows: dict[str, list[dict[str, Any]]]) -> MagicMock:
 
 def test_list_entries(monkeypatch: pytest.MonkeyPatch, client: TestClient) -> None:
     rows = [{"id": "e1", "date": "2026-05-01", "summary": "ok", "mood": None}]
-    monkeypatch.setattr(db, "user_client", lambda _jwt: _stub_supabase({"entries": rows}))
+    monkeypatch.setattr(
+        db, "user_client", lambda _uid, _jwt=None: _stub_supabase({"entries": rows})
+    )
     res = client.get("/entries")
     assert res.status_code == 200
     assert res.json()[0]["id"] == "e1"
 
 
 def test_get_entry_returns_404(monkeypatch: pytest.MonkeyPatch, client: TestClient) -> None:
-    monkeypatch.setattr(db, "user_client", lambda _jwt: _stub_supabase({"entries": []}))
+    monkeypatch.setattr(
+        db, "user_client", lambda _uid, _jwt=None: _stub_supabase({"entries": []})
+    )
     res = client.get("/entries/missing")
     assert res.status_code == 404
 
 
 def test_list_patterns(monkeypatch: pytest.MonkeyPatch, client: TestClient) -> None:
     rows = [{"id": "p1", "name": "Sunday dread"}]
-    monkeypatch.setattr(db, "user_client", lambda _jwt: _stub_supabase({"patterns": rows}))
+    monkeypatch.setattr(
+        db, "user_client", lambda _uid, _jwt=None: _stub_supabase({"patterns": rows})
+    )
     res = client.get("/patterns")
     assert res.status_code == 200
     assert res.json()[0]["name"] == "Sunday dread"
@@ -87,7 +92,9 @@ def test_search_returns_matches(monkeypatch: pytest.MonkeyPatch, client: TestCli
     monkeypatch.setattr(embeddings, "embed", lambda _t: [0.1, 0.2, 0.3])
     matches = [{"entry_id": "e1", "similarity": 0.9, "content": "x"}]
     monkeypatch.setattr(
-        db, "user_client", lambda _jwt: _stub_supabase({"__rpc__": matches})
+        db,
+        "user_client",
+        lambda _uid, _jwt=None: _stub_supabase({"__rpc__": matches}),
     )
     res = client.get("/search", params={"q": "loneliness"})
     assert res.status_code == 200
@@ -98,7 +105,7 @@ def test_export_data(monkeypatch: pytest.MonkeyPatch, client: TestClient) -> Non
     monkeypatch.setattr(
         db,
         "user_client",
-        lambda _jwt: _stub_supabase(
+        lambda _uid, _jwt=None: _stub_supabase(
             {"entries": [{"id": "e1"}], "patterns": [{"id": "p1"}], "pattern_occurrences": []}
         ),
     )
@@ -135,7 +142,7 @@ def test_settings_patch_accepts_crisis_ack(
 def test_mint_connector_token(monkeypatch: pytest.MonkeyPatch, client: TestClient) -> None:
     inserted: dict[str, Any] = {}
 
-    def _build_user_client(_jwt: str) -> MagicMock:
+    def _build_user_client(_uid: str, _jwt: str | None = None) -> MagicMock:
         sb = MagicMock()
 
         def _table(name: str) -> MagicMock:
@@ -227,7 +234,7 @@ def test_delete_account_calls_rpc(
 ) -> None:
     rpc_calls: list[str] = []
 
-    def _build_user_client(_jwt: str) -> MagicMock:
+    def _build_user_client(_uid: str, _jwt: str | None = None) -> MagicMock:
         sb = MagicMock()
         rpc_chain = MagicMock()
         rpc_response = MagicMock()

@@ -19,8 +19,9 @@ strict = true
 ignore_missing_imports = true
 files = ["."]
 exclude = ["tests/"]
+mypy_path = "../.."
 
 [tool.pytest.ini_options]
-pythonpath = ["."]
+pythonpath = [".", "../.."]
 testpaths = ["tests"]
 asyncio_mode = "auto"

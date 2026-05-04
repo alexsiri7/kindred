@@ -13,8 +13,8 @@ from unittest.mock import MagicMock
 import jwt
 import pytest
 
-import db
-import settings as settings_module
+from lib import db
+from lib import settings as settings_module
 
 JWT_SECRET = "test-jwt-secret-needs-to-be-at-least-32-bytes-long"
 USER_ID = "11111111-2222-3333-4444-555555555555"
@@ -61,15 +61,30 @@ def test_user_client_raises_when_secret_missing(monkeypatch: pytest.MonkeyPatch)
 def test_user_client_attaches_jwt_via_postgrest_auth(
     _supabase_jwt_secret: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """``user_client`` must call ``client.postgrest.auth(jwt)`` exactly once."""
+    """``user_client`` must call ``client.postgrest.auth(jwt)`` exactly once
+    when called without an explicit JWT (MCP flow)."""
     fake_client = MagicMock()
 
     def _fake_create_client(_url: str, _key: str) -> Any:
         return fake_client
 
     monkeypatch.setattr(db, "create_client", _fake_create_client)
-    db.user_client(USER_ID)
+    db.user_client(USER_ID, None)
     fake_client.postgrest.auth.assert_called_once()
     (jwt_arg,), _ = fake_client.postgrest.auth.call_args
     payload = jwt.decode(jwt_arg, JWT_SECRET, algorithms=["HS256"], audience="authenticated")
     assert payload["sub"] == USER_ID
+
+
+def test_user_client_passes_through_provided_jwt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``user_client(uid, jwt)`` (web flow) attaches the caller-supplied JWT verbatim."""
+    fake_client = MagicMock()
+
+    def _fake_create_client(_url: str, _key: str) -> Any:
+        return fake_client
+
+    monkeypatch.setattr(db, "create_client", _fake_create_client)
+    db.user_client(USER_ID, "caller-supplied-jwt")
+    fake_client.postgrest.auth.assert_called_once_with("caller-supplied-jwt")

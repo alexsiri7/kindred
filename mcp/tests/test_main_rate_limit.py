@@ -10,9 +10,8 @@ from typing import Any
 
 import httpx
 import pytest
+from lib import db, embeddings
 
-import db
-import embeddings
 import rate_limit
 import settings as settings_module
 
@@ -47,10 +46,10 @@ def _stub_search_tool(monkeypatch: pytest.MonkeyPatch) -> None:
     tool bodies succeed without external dependencies."""
     monkeypatch.setattr(embeddings, "embed", lambda text: [0.0, 0.1, 0.2])
     monkeypatch.setattr(
-        db, "match_entries", lambda user_id, vector, limit: []
+        db, "match_entries", lambda user_id, jwt_token, vector, limit: []
     )
     monkeypatch.setattr(
-        db, "list_recent_entries", lambda user_id, limit: []
+        db, "list_recent_entries", lambda user_id, jwt_token, limit: []
     )
 
 

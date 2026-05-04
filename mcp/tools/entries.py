@@ -1,12 +1,12 @@
-"""Entry-related MCP tools: save, get, list_recent, search."""
+"""Entry-related MCP tools — thin wrappers over lib.services.entries."""
 
 from __future__ import annotations
 
 import asyncio
 from typing import Any
 
-import db
-import embeddings
+from lib.services import entries as entries_service
+
 from auth import current_user_id
 
 
@@ -23,37 +23,40 @@ async def save_entry(
     per call — same-day callers will produce two rows.
     """
     user_id = current_user_id.get()
-    entry_id = await asyncio.to_thread(
-        db.insert_entry, user_id, date, summary, mood, transcript
+    return await asyncio.to_thread(
+        entries_service.save_entry,
+        user_id,
+        None,
+        date,
+        summary,
+        mood,
+        transcript,
     )
-    vector = await asyncio.to_thread(embeddings.embed, summary)
-    await asyncio.to_thread(db.insert_embedding, user_id, entry_id, vector, summary)
-    return entry_id
 
 
 async def get_entry(
     date: str | None = None,
     id: str | None = None,
 ) -> dict[str, Any]:
-    if (date is None) == (id is None):
-        raise ValueError("provide exactly one of `date` or `id`")
     user_id = current_user_id.get()
-    if id is not None:
-        row = await asyncio.to_thread(db.get_entry_by_id, user_id, id)
-    else:
-        assert date is not None
-        row = await asyncio.to_thread(db.get_entry_by_date, user_id, date)
-    if row is None:
-        raise LookupError("entry not found")
-    return row
+    return await asyncio.to_thread(
+        entries_service.get_entry_by_date_or_id,
+        user_id,
+        None,
+        date=date,
+        entry_id=id,
+    )
 
 
 async def list_recent_entries(limit: int = 10) -> list[dict[str, Any]]:
     user_id = current_user_id.get()
-    return await asyncio.to_thread(db.list_recent_entries, user_id, limit)
+    return await asyncio.to_thread(
+        entries_service.list_recent_entries, user_id, None, limit
+    )
 
 
 async def search_entries(query: str, limit: int = 5) -> list[dict[str, Any]]:
     user_id = current_user_id.get()
-    vector = await asyncio.to_thread(embeddings.embed, query)
-    return await asyncio.to_thread(db.match_entries, user_id, vector, limit)
+    return await asyncio.to_thread(
+        entries_service.search_entries, user_id, None, query, limit
+    )

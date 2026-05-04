@@ -7,6 +7,7 @@ See [docs/kindred-prd-dd.md](docs/kindred-prd-dd.md) for the full PRD and design
 ## Structure
 
 ```
+lib/           # Shared Python package: db helpers, embeddings, services
 mcp/           # MCP server (FastAPI, Python 3.12)
 web/
   backend/     # Web app API (FastAPI, Python 3.12)
@@ -23,6 +24,9 @@ scripts/
 ```bash
 cp .env.example .env                                 # fill in Supabase + Requesty keys
 supabase db push                                     # apply migrations to your project
+
+# First time only: install the shared lib in editable mode
+pip install -e ./lib
 
 # MCP server (port 8000)
 cd mcp && pip install -r requirements.txt && uvicorn main:app --host 0.0.0.0 --port 8000
