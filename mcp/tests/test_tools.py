@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 from lib import db, embeddings
+from mcp.server.fastmcp.exceptions import ToolError
 
 from auth import current_user_id
 from tools import entries as entry_tools
@@ -67,9 +68,9 @@ async def test_save_entry_inserts_then_embeds(monkeypatch: pytest.MonkeyPatch) -
 
 async def test_get_entry_requires_exactly_one_arg(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(db, "get_entry_by_id", lambda u, j, i: {"id": i})
-    with pytest.raises(ValueError):
+    with pytest.raises(ToolError):
         await entry_tools.get_entry()
-    with pytest.raises(ValueError):
+    with pytest.raises(ToolError):
         await entry_tools.get_entry(date="2026-05-01", id=ENTRY_ID)
 
 
@@ -183,7 +184,7 @@ async def test_log_occurrence_creates_pattern_when_missing(
 
 
 async def test_log_occurrence_rejects_out_of_range_intensity() -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(ToolError):
         await pattern_tools.log_occurrence(
             pattern_name="x",
             entry_id=ENTRY_ID,
