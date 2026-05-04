@@ -1,13 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Mock } from 'vitest'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 
 vi.mock('../../api/client', () => ({
   api: {
-    post: vi.fn(async () => ({ token: 'kdr_test_token', created_at: null })),
+    post: vi.fn(async () => ({
+      token: 'kdr_test_token',
+      created_at: null,
+      expires_at: null,
+    })),
   },
 }))
 
+import { api } from '../../api/client'
 import { Connect, ONE_LINER } from '../Connect'
 
 const renderConnect = () =>
@@ -75,5 +81,23 @@ describe('Connect', () => {
     expect(
       screen.getByRole('heading', { name: /connect kindred to your ai assistant/i }),
     ).toBeInTheDocument()
+  })
+
+  it('renders the password warning banner above the token reveal', () => {
+    renderConnect()
+    expect(
+      screen.getByText(/treat this token like a password/i),
+    ).toBeInTheDocument()
+  })
+
+  it('renders the expiry date after minting', async () => {
+    ;(api.post as Mock).mockResolvedValueOnce({
+      token: 'kdr_x',
+      created_at: null,
+      expires_at: '2026-08-02T00:00:00Z',
+    })
+    renderConnect()
+    fireEvent.click(screen.getByRole('button', { name: /mint token/i }))
+    expect(await screen.findByText(/Expires .*2026/i)).toBeInTheDocument()
   })
 })

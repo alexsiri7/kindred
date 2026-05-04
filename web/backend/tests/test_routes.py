@@ -37,6 +37,7 @@ def _stub_table(rows: list[dict[str, Any]]) -> MagicMock:
     # Every chained method returns the same stub; .execute() yields the response.
     stub.select.return_value = stub
     stub.insert.return_value = stub
+    stub.update.return_value = stub
     stub.eq.return_value = stub
     stub.order.return_value = stub
     stub.limit.return_value = stub
@@ -227,6 +228,63 @@ def test_patch_settings_invokes_update_user_metadata(
         "transcript_enabled": False,
         "crisis_disclaimer_acknowledged_at": None,
     }
+
+
+def test_list_connector_tokens(
+    monkeypatch: pytest.MonkeyPatch, client: TestClient
+) -> None:
+    rows = [
+        {
+            "id": "aaaa1111-bbbb-2222-cccc-333333333333",
+            "created_at": "2026-05-01T00:00:00Z",
+            "last_used_at": None,
+            "expires_at": "2026-07-30T00:00:00Z",
+            "revoked_at": None,
+        }
+    ]
+    monkeypatch.setattr(
+        db,
+        "user_client",
+        lambda _uid, _jwt=None: _stub_supabase({"connector_tokens": rows}),
+    )
+    res = client.get("/connect/tokens")
+    assert res.status_code == 200
+    body = res.json()
+    assert isinstance(body, list)
+    assert body[0]["id"] == rows[0]["id"]
+    assert body[0]["expires_at"] == rows[0]["expires_at"]
+
+
+def test_revoke_connector_token(
+    monkeypatch: pytest.MonkeyPatch, client: TestClient
+) -> None:
+    token_id = "aaaa1111-bbbb-2222-cccc-333333333333"
+    updated = {"id": token_id, "revoked_at": "2026-05-04T12:00:00Z"}
+    monkeypatch.setattr(
+        db,
+        "user_client",
+        lambda _uid, _jwt=None: _stub_supabase({"connector_tokens": [updated]}),
+    )
+    res = client.post(f"/connect/tokens/{token_id}/revoke")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["id"] == token_id
+    assert body["revoked_at"] == "2026-05-04T12:00:00Z"
+
+
+def test_revoke_connector_token_not_found(
+    monkeypatch: pytest.MonkeyPatch, client: TestClient
+) -> None:
+    monkeypatch.setattr(
+        db,
+        "user_client",
+        lambda _uid, _jwt=None: _stub_supabase({"connector_tokens": []}),
+    )
+    res = client.post(
+        "/connect/tokens/aaaa1111-bbbb-2222-cccc-333333333333/revoke"
+    )
+    assert res.status_code == 404
+    assert res.json()["detail"] == "token not found"
 
 
 def test_delete_account_calls_rpc(
