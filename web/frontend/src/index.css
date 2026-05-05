@@ -374,12 +374,18 @@ button { font-family: inherit; }
 
 /* typical quadrants */
 .typical {
+  position: relative;
   display: grid; grid-template-columns: 1fr 1fr; gap: 4px;
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: var(--r-lg); padding: 4px;
   margin-bottom: var(--sp-7);
 }
+.typical::before, .typical::after {
+  content: ''; position: absolute; background: var(--ink); pointer-events: none;
+}
+.typical::before { left: 50%; top: 12%; bottom: 12%; width: 1px; transform: translateX(-0.5px); opacity: 0.15; }
+.typical::after  { top: 50%; left: 12%; right: 12%; height: 1px; transform: translateY(-0.5px); opacity: 0.15; }
 .typical-q { padding: var(--sp-4); border-radius: var(--r-md); background: var(--paper); }
 .typical-q .q-eye { font-family: var(--font-mono); font-size: 10px; color: var(--ink-3); letter-spacing: 0.12em; text-transform: uppercase; }
 .typical-q .q-name { font-family: var(--font-display); font-style: italic; font-size: 18px; color: var(--ink); margin: 4px 0 8px; }
@@ -389,13 +395,14 @@ button { font-family: inherit; }
 .timeline { position: relative; padding-left: 32px; }
 .timeline::before {
   content: ''; position: absolute; left: 11px; top: 6px; bottom: 6px;
-  width: 1px; background: var(--border); border-left: 1px dashed var(--border-strong); border-left-style: dashed;
+  border-left: 1px dashed var(--border-strong); pointer-events: none;
 }
 .tl-item { position: relative; padding-bottom: var(--sp-5); }
 .tl-item::before {
   content: ''; position: absolute; left: -28px; top: 6px;
   width: 12px; height: 12px; border-radius: 50%;
   background: var(--paper); border: 2px solid var(--terracotta);
+  pointer-events: none;
 }
 .tl-item.is-recent::before { background: var(--terracotta); }
 .tl-date { font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); letter-spacing: 0.06em; margin-bottom: 4px; }
