@@ -9,7 +9,6 @@ vi.mock('../../api/client', () => ({
 }))
 
 import { Search } from '../Search'
-import { api } from '../../api/client'
 
 describe('Search', () => {
   it('renders the spec page title', () => {
@@ -34,14 +33,13 @@ describe('Search', () => {
   })
 
   it('shows "Nothing found for …" when a query returns no hits', async () => {
-    vi.mocked(api.get).mockResolvedValueOnce([])
     render(
       <MemoryRouter initialEntries={['/app/search?q=zzz']}>
         <Search />
       </MemoryRouter>,
     )
     await waitFor(() =>
-      expect(screen.getByText(/nothing found for/i)).toBeInTheDocument(),
+      expect(screen.getByText(/nothing found for "zzz"/i)).toBeInTheDocument(),
     )
   })
 })

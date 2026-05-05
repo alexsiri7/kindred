@@ -107,7 +107,7 @@ export function Search() {
         >
           <div
             className="eyebrow"
-            style={{ justifyContent: 'center', marginBottom: 'var(--sp-3)' }}
+            style={{ marginBottom: 'var(--sp-3)' }}
           >
             <span className="glyph">◇</span> Try a phrase
           </div>
