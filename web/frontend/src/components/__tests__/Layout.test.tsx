@@ -13,6 +13,20 @@ vi.mock('../../store/auth', () => ({
   ) => selector(authState),
 }))
 
+const navState: { entryCount: number | null; patternCount: number | null } = {
+  entryCount: null,
+  patternCount: null,
+}
+
+vi.mock('../../store/navCounts', () => ({
+  useNavCounts: (
+    selector: (s: {
+      entryCount: number | null
+      patternCount: number | null
+    }) => unknown,
+  ) => selector(navState),
+}))
+
 vi.mock('../../lib/supabase', () => ({
   supabase: { auth: { signOut: vi.fn() } },
 }))
@@ -159,6 +173,96 @@ describe('Layout — auth gate', () => {
     } finally {
       authState.session = { user: { email: 'tester@example.com' } }
       authState.initialized = true
+    }
+  })
+})
+
+describe('Layout — sidebar nav', () => {
+  function findSideLink(container: HTMLElement, label: string) {
+    return Array.from(container.querySelectorAll('.side-link')).find((el) =>
+      el.textContent?.includes(label),
+    ) as HTMLElement | undefined
+  }
+
+  it('renders count badges for Entries and Patterns when counts are loaded', () => {
+    navState.entryCount = 24
+    navState.patternCount = 7
+    try {
+      const { container } = render(
+        <MemoryRouter initialEntries={['/app']}>
+          <Layout />
+        </MemoryRouter>,
+      )
+      const entriesLink = findSideLink(container, 'Entries')
+      const patternsLink = findSideLink(container, 'Patterns')
+      expect(entriesLink?.querySelector('.count')?.textContent).toBe('24')
+      expect(patternsLink?.querySelector('.count')?.textContent).toBe('7')
+    } finally {
+      navState.entryCount = null
+      navState.patternCount = null
+    }
+  })
+
+  it('omits count badges when counts are null', () => {
+    navState.entryCount = null
+    navState.patternCount = null
+    const { container } = render(
+      <MemoryRouter initialEntries={['/app']}>
+        <Layout />
+      </MemoryRouter>,
+    )
+    const entriesLink = findSideLink(container, 'Entries')
+    const patternsLink = findSideLink(container, 'Patterns')
+    const searchLink = findSideLink(container, 'Search')
+    expect(entriesLink?.querySelector('.count')).toBeNull()
+    expect(patternsLink?.querySelector('.count')).toBeNull()
+    expect(searchLink?.querySelector('.count')).toBeNull()
+  })
+
+  it('never renders a count badge on the Search nav item', () => {
+    navState.entryCount = 24
+    navState.patternCount = 7
+    try {
+      const { container } = render(
+        <MemoryRouter initialEntries={['/app']}>
+          <Layout />
+        </MemoryRouter>,
+      )
+      const searchLink = findSideLink(container, 'Search')
+      expect(searchLink?.querySelector('.count')).toBeNull()
+    } finally {
+      navState.entryCount = null
+      navState.patternCount = null
+    }
+  })
+
+  it("renders 'Connect to Claude' as the connect nav label", () => {
+    render(
+      <MemoryRouter initialEntries={['/app']}>
+        <Layout />
+      </MemoryRouter>,
+    )
+    expect(
+      screen.getByRole('link', { name: /connect to claude/i }),
+    ).toBeInTheDocument()
+  })
+
+  it('renders a "0" badge when count is loaded as zero (distinguishes 0 from null)', () => {
+    navState.entryCount = 0
+    navState.patternCount = 0
+    try {
+      const { container } = render(
+        <MemoryRouter initialEntries={['/app']}>
+          <Layout />
+        </MemoryRouter>,
+      )
+      const entriesLink = findSideLink(container, 'Entries')
+      const patternsLink = findSideLink(container, 'Patterns')
+      expect(entriesLink?.querySelector('.count')?.textContent).toBe('0')
+      expect(patternsLink?.querySelector('.count')?.textContent).toBe('0')
+    } finally {
+      navState.entryCount = null
+      navState.patternCount = null
     }
   })
 })

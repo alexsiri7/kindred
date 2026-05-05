@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router'
 import { useAuth } from '../store/auth'
+import { useNavCounts } from '../store/navCounts'
 import { supabase } from '../lib/supabase'
 import { KindredWordmark } from './Brand'
 import { CrisisDisclaimerModal } from './CrisisDisclaimerModal'
@@ -93,6 +94,8 @@ function buildGitHubIssueUrl(pagePath: string): string {
 export function Layout() {
   const session = useAuth((s) => s.session)
   const initialized = useAuth((s) => s.initialized)
+  const entryCount = useNavCounts((s) => s.entryCount)
+  const patternCount = useNavCounts((s) => s.patternCount)
   const location = useLocation()
   const navigate = useNavigate()
   const reportIssueUrl = useMemo(
@@ -119,14 +122,14 @@ export function Layout() {
     return location.pathname.startsWith(path)
   }
 
-  const libraryItems: { path: string; label: string; icon: IconName }[] = [
-    { path: '/app', label: 'Entries', icon: 'book' },
-    { path: '/app/patterns', label: 'Patterns', icon: 'layers' },
+  const libraryItems: { path: string; label: string; icon: IconName; count?: number | null }[] = [
+    { path: '/app', label: 'Entries', icon: 'book', count: entryCount },
+    { path: '/app/patterns', label: 'Patterns', icon: 'layers', count: patternCount },
     { path: '/app/search', label: 'Search', icon: 'search' },
   ]
 
   const accountItems: { path: string; label: string; icon: IconName }[] = [
-    { path: '/app/connect', label: 'Connect', icon: 'plug' },
+    { path: '/app/connect', label: 'Connect to Claude', icon: 'plug' },
     { path: '/app/settings', label: 'Settings', icon: 'settings' },
   ]
 
@@ -153,6 +156,7 @@ export function Layout() {
             >
               <Icon name={item.icon} />
               <span>{item.label}</span>
+              {item.count != null && <span className="count">{item.count}</span>}
             </Link>
           ))}
         </nav>
@@ -192,7 +196,10 @@ export function Layout() {
           </div>
           <button
             type="button"
-            onClick={() => void supabase.auth.signOut()}
+            onClick={() => {
+              useNavCounts.setState({ entryCount: null, patternCount: null })
+              void supabase.auth.signOut()
+            }}
             style={{
               marginLeft: 'auto',
               background: 'none',

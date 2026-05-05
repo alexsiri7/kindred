@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import secrets
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 
 from lib import db
 from lib.settings import settings as lib_settings
@@ -42,8 +42,7 @@ def mint_token(user_id: str, jwt_token: str) -> dict[str, Any]:
         )
         .execute()
     )
-    raw: Any = res.data or []
-    rows: list[dict[str, Any]] = list(raw)
+    rows = cast(list[dict[str, Any]], res.data or [])
     row = rows[0] if rows else {}
     return {
         "token": token,
@@ -80,8 +79,7 @@ def list_tokens(user_id: str, jwt_token: str) -> list[dict[str, Any]]:
         .order("created_at", desc=True)
         .execute()
     )
-    raw: Any = res.data or []
-    return list(raw)
+    return cast(list[dict[str, Any]], res.data or [])
 
 
 def revoke_token(user_id: str, jwt_token: str, token_id: str) -> dict[str, Any]:
@@ -100,8 +98,7 @@ def revoke_token(user_id: str, jwt_token: str, token_id: str) -> dict[str, Any]:
         .eq("user_id", user_id)
         .execute()
     )
-    raw: Any = res.data or []
-    rows: list[dict[str, Any]] = list(raw)
+    rows = cast(list[dict[str, Any]], res.data or [])
     if not rows:
         raise LookupError("token not found")
     return rows[0]

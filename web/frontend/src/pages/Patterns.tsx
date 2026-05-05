@@ -1,16 +1,27 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { api, type Pattern } from '../api/client'
+import { useNavCounts } from '../store/navCounts'
 
 export function Patterns() {
   const [patterns, setPatterns] = useState<Pattern[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    let stale = false
     api
       .get<Pattern[]>('/patterns')
-      .then(setPatterns)
-      .catch((e: Error) => setError(e.message))
+      .then((arr) => {
+        if (stale) return
+        setPatterns(arr)
+        useNavCounts.getState().setPatternCount(arr.length)
+      })
+      .catch((e: Error) => {
+        if (!stale) setError(e.message)
+      })
+    return () => {
+      stale = true
+    }
   }, [])
 
   if (error) return <p style={{ color: 'var(--rust)' }}>{error}</p>

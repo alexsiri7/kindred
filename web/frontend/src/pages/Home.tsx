@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { api, type EntrySummary } from '../api/client'
+import { useNavCounts } from '../store/navCounts'
 
 function formatEntryDate(dateStr: string) {
   const d = new Date(dateStr + 'T12:00')
@@ -26,10 +27,20 @@ export function Home() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    let stale = false
     api
       .get<EntrySummary[]>('/entries')
-      .then(setEntries)
-      .catch((e: Error) => setError(e.message))
+      .then((arr) => {
+        if (stale) return
+        setEntries(arr)
+        useNavCounts.getState().setEntryCount(arr.length)
+      })
+      .catch((e: Error) => {
+        if (!stale) setError(e.message)
+      })
+    return () => {
+      stale = true
+    }
   }, [])
 
   const byMonth = entries ? groupByMonth(entries) : {}
