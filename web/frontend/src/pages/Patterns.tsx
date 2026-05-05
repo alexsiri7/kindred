@@ -15,6 +15,8 @@ function weekBars(
     ? Math.floor((now.getTime() - lastSeen.getTime()) / MS_PER_WEEK)
     : -1
   return Array.from({ length: 12 }, (_, i) => {
+    // Decorative bucketing: weekStart is UTC-derived, month check uses local time.
+    // At most one bar may shift class around month boundaries — acceptable.
     const weekStart = new Date(now.getTime() - (11 - i) * MS_PER_WEEK)
     const isMonth =
       weekStart.getFullYear() === now.getFullYear() &&
