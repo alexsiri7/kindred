@@ -79,7 +79,7 @@ describe('Connect', () => {
   it('renders the provider-neutral page heading', () => {
     renderConnect()
     expect(
-      screen.getByRole('heading', { name: /connect kindred to your ai assistant/i }),
+      screen.getByRole('heading', { name: /connect to claude/i }),
     ).toBeInTheDocument()
   })
 

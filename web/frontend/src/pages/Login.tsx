@@ -1,7 +1,7 @@
 import { Navigate, useSearchParams } from 'react-router'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../store/auth'
-import { KindredMark } from '../components/Brand'
+import { KindredWordmark } from '../components/Brand'
 import { Button } from '../components/Button'
 
 export function Login() {
@@ -42,24 +42,11 @@ export function Login() {
         <div
           style={{
             display: 'flex',
-            alignItems: 'center',
             justifyContent: 'center',
-            gap: 10,
             marginBottom: 'var(--sp-6)',
           }}
         >
-          <KindredMark size={36} />
-          <span
-            style={{
-              fontFamily: 'var(--font-display)',
-              fontSize: 28,
-              lineHeight: 1,
-              letterSpacing: '-0.01em',
-            }}
-          >
-            <em>Kindred</em>
-            <span style={{ color: 'var(--terracotta)' }}>.</span>
-          </span>
+          <KindredWordmark markSize={36} />
         </div>
 
         <h1
@@ -74,12 +61,15 @@ export function Login() {
         </h1>
         <p
           style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 11,
             color: 'var(--ink-3)',
-            fontSize: 'var(--fs-sm)',
+            letterSpacing: '0.04em',
             marginBottom: 'var(--sp-6)',
+            lineHeight: 1.5,
           }}
         >
-          A reflective journaling companion.
+          Your entries are encrypted. We store nothing we don&apos;t need.
         </p>
 
         {errorMsg && (

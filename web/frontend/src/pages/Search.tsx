@@ -73,6 +73,14 @@ export function Search() {
         </p>
       </div>
 
+      <div className="readonly-banner">
+        <span className="lock">🔒</span>
+        <span>
+          <strong>Read-only.</strong> Entries are written through the journaling conversation in
+          your AI assistant — not from here.
+        </span>
+      </div>
+
       <div className="search-bar">
         <SearchIcon />
         <input
