@@ -8,21 +8,46 @@ import { useAuth } from '../store/auth'
    ============================================================ */
 function Nav() {
   const session = useAuth((s) => s.session)
+  const [activeId, setActiveId] = useState<string>('')
+
+  useEffect(() => {
+    const ids = ['how', 'demo', 'patterns']
+    const sections = ids
+      .map((id) => document.getElementById(id))
+      .filter((el): el is HTMLElement => el !== null)
+    if (sections.length === 0) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0]
+        if (visible) setActiveId(visible.target.id)
+      },
+      { rootMargin: '-40% 0px -55% 0px', threshold: [0, 0.25, 0.5, 0.75, 1] },
+    )
+    sections.forEach((s) => observer.observe(s))
+    return () => observer.disconnect()
+  }, [])
+
+  const linkClass = (id: string) =>
+    `nav-link${activeId === id ? ' is-active' : ''}`
+
   return (
     <nav className="nav">
       <Link to="/" style={{ textDecoration: 'none' }}>
         <KindredWordmark markSize={26} />
       </Link>
       <div className="nav-links">
-        <a href="#how" className="nav-link">How it works</a>
-        <a href="#demo" className="nav-link">Demo</a>
-        <a href="#patterns" className="nav-link">Patterns</a>
+        <a href="#how" className={linkClass('how')}>How it works</a>
+        <a href="#demo" className={linkClass('demo')}>A session</a>
+        <a href="#patterns" className={linkClass('patterns')}>Patterns</a>
         <Link to="/privacy" className="nav-link">Privacy</Link>
       </div>
       <div className="nav-cta">
         {session
           ? <Link to="/app" className="nav-link">Open app</Link>
-          : <Link to="/login" className="nav-link">Sign in</Link>
+          : <Link to="/login" className="btn btn-ghost btn-sm">Sign in</Link>
         }
         <Link to="/app" className="btn btn-primary btn-sm">Connect your AI</Link>
       </div>
