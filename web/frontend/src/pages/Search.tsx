@@ -50,11 +50,8 @@ export function Search() {
     setInputVal(val)
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => {
-      if (val.trim()) {
-        setParams({ q: val.trim() })
-      } else {
-        setParams({})
-      }
+      const trimmed = val.trim()
+      setParams(trimmed ? { q: trimmed } : {})
     }, 300)
   }
 

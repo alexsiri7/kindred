@@ -16,6 +16,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from functools import lru_cache
 from typing import Any, cast
+from uuid import UUID
 
 import httpx
 import jwt
@@ -219,8 +220,6 @@ def list_patterns(
 def get_pattern(
     user_id: str, jwt_token: str | None, name_or_id: str
 ) -> dict[str, Any] | None:
-    from uuid import UUID
-
     try:
         UUID(name_or_id)
     except ValueError:
