@@ -70,6 +70,14 @@ describe('Settings — connector tokens section', () => {
     expect(await screen.findByText(/no tokens yet/i)).toBeInTheDocument()
   })
 
+  it('renders the spec page title', async () => {
+    mockEndpoints([])
+    render(<Settings />)
+    expect(
+      await screen.findByRole('heading', { name: /^Settings$/i }),
+    ).toBeInTheDocument()
+  })
+
   it('renders an active token row with status, created date, and last used', async () => {
     mockEndpoints([ACTIVE_TOKEN])
     render(<Settings />)
