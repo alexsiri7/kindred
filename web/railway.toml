@@ -1,9 +1,9 @@
 # Railway config for the web service.
-# Service root directory = "web/" in the Railway dashboard.
-# Dockerfile is web/Dockerfile (auto-detected from root).
+# Dashboard settings required: Root Directory = "/", Config-as-code Path = "web/railway.toml".
+# Build context is the repo root so COPY lib/ can reach the shared lib package.
 
 [build]
-dockerfilePath = "Dockerfile"
+dockerfilePath = "web/Dockerfile"
 
 [deploy]
 healthcheckPath = "/healthz"
