@@ -6,6 +6,7 @@ import {
   type UserSettings,
 } from '../api/client'
 import { Button } from '../components/Button'
+import { Toggle } from '../components/Toggle'
 
 const ALL_TIMEZONES = Intl.supportedValuesOf('timeZone')
 
@@ -121,25 +122,6 @@ function TimezoneInput({
         </ul>
       )}
     </div>
-  )
-}
-
-function Toggle({
-  on,
-  onChange,
-  label,
-}: {
-  on: boolean
-  onChange: (val: boolean) => void
-  label: string
-}) {
-  return (
-    <label className={`toggle ${on ? 'on' : ''}`} onClick={() => onChange(!on)}>
-      <span className="toggle-track">
-        <span className="toggle-thumb" />
-      </span>
-      <span className="toggle-label">{label}</span>
-    </label>
   )
 }
 
@@ -297,7 +279,7 @@ export function Settings() {
           <span className="glyph">◈</span> Settings
         </div>
         <h1 className="page-title">
-          Your <em>data</em>, your terms.
+          <em>Settings</em>
         </h1>
         <p className="page-sub">A few small toggles. Nothing else hidden behind submenus.</p>
       </div>
@@ -335,7 +317,7 @@ export function Settings() {
         </div>
         <div className="set-control">
           <Toggle
-            on={settings.transcript_enabled}
+            checked={settings.transcript_enabled}
             onChange={(val) => void save({ transcript_enabled: val })}
             label={
               settings.transcript_enabled
