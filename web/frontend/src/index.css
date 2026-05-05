@@ -877,7 +877,7 @@ section.hero { font-family: var(--font-body); font-size: var(--fs-md); letter-sp
    Reduced motion — drop transform/rotation/orbit, keep fades
    ============================================================ */
 @media (prefers-reduced-motion: reduce) {
-  .hero-orbit svg { animation-play-state: paused; }
+  .hero-orbit svg { animation: none; }
   .entry-peek-1, .entry-peek-2 { transform: none; }
   .step { transition: none; }
   .step:hover { transform: none; }

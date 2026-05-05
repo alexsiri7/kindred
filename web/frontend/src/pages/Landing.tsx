@@ -8,7 +8,9 @@ import { useAuth } from '../store/auth'
    ============================================================ */
 function Nav() {
   const session = useAuth((s) => s.session)
-  const [activeId, setActiveId] = useState<string>('')
+  const [activeId, setActiveId] = useState<string>(() =>
+    typeof window !== 'undefined' ? window.location.hash.slice(1) : '',
+  )
 
   useEffect(() => {
     const ids = ['how', 'demo', 'patterns']
@@ -24,7 +26,7 @@ function Nav() {
           .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0]
         if (visible) setActiveId(visible.target.id)
       },
-      { rootMargin: '-40% 0px -55% 0px', threshold: [0, 0.25, 0.5, 0.75, 1] },
+      { rootMargin: '-20% 0px -60% 0px', threshold: [0, 0.5, 1] },
     )
     sections.forEach((s) => observer.observe(s))
     return () => observer.disconnect()
@@ -32,6 +34,8 @@ function Nav() {
 
   const linkClass = (id: string) =>
     `nav-link${activeId === id ? ' is-active' : ''}`
+  const ariaCurrent = (id: string): 'location' | undefined =>
+    activeId === id ? 'location' : undefined
 
   return (
     <nav className="nav">
@@ -39,9 +43,9 @@ function Nav() {
         <KindredWordmark markSize={26} />
       </Link>
       <div className="nav-links">
-        <a href="#how" className={linkClass('how')}>How it works</a>
-        <a href="#demo" className={linkClass('demo')}>A session</a>
-        <a href="#patterns" className={linkClass('patterns')}>Patterns</a>
+        <a href="#how" className={linkClass('how')} aria-current={ariaCurrent('how')}>How it works</a>
+        <a href="#demo" className={linkClass('demo')} aria-current={ariaCurrent('demo')}>A session</a>
+        <a href="#patterns" className={linkClass('patterns')} aria-current={ariaCurrent('patterns')}>Patterns</a>
         <Link to="/privacy" className="nav-link">Privacy</Link>
       </div>
       <div className="nav-cta">
