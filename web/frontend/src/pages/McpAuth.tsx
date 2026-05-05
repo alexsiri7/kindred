@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { KindredWordmark } from '../components/Brand'
+import { Button } from '../components/Button'
 
 const MCP_BASE = import.meta.env.VITE_MCP_BASE_URL ?? 'https://kindred-mcp.interstellarai.net'
 
@@ -51,7 +52,9 @@ export function McpAuth() {
         const { redirect_url } = (await resp.json()) as { redirect_url: string }
         sessionStorage.removeItem('mcp_flow_id')
         setStatus('done')
-        window.location.href = redirect_url
+        setTimeout(() => {
+          window.location.href = redirect_url
+        }, 600)
       } catch (err) {
         setStatus('error')
         setErrorMsg(String(err))
@@ -121,6 +124,56 @@ export function McpAuth() {
           <p style={{ color: 'var(--ink-3)', fontSize: 'var(--fs-sm)', margin: 0 }}>
             {errorMsg}
           </p>
+          <div style={{ marginTop: 'var(--sp-5)' }}>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                window.location.href = '/app/connect'
+              }}
+            >
+              Try again
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (status === 'done') {
+    return (
+      <div style={wrapStyle}>
+        <div style={cardStyle}>
+          {brandRow}
+          <div
+            style={{
+              color: 'var(--moss)',
+              fontSize: 36,
+              lineHeight: 1,
+              marginBottom: 'var(--sp-3)',
+            }}
+            aria-hidden="true"
+          >
+            ✓
+          </div>
+          <p
+            style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: 'var(--fs-h3)',
+              fontWeight: 400,
+              margin: 0,
+            }}
+          >
+            Connected.
+          </p>
+          <p
+            style={{
+              color: 'var(--ink-3)',
+              fontSize: 'var(--fs-sm)',
+              margin: 'var(--sp-2) 0 0',
+            }}
+          >
+            Returning to your AI assistant…
+          </p>
         </div>
       </div>
     )
@@ -142,26 +195,15 @@ export function McpAuth() {
         >
           {status === 'completing' ? 'Completing authentication…' : 'Connecting…'}
         </p>
-        <div
-          style={{
-            display: 'inline-flex',
-            gap: 6,
-            alignItems: 'center',
-          }}
+        <span
+          className="typing"
+          style={{ justifyContent: 'center' }}
+          aria-hidden="true"
         >
-          {[0, 0.18, 0.36].map((delay, i) => (
-            <span
-              key={i}
-              style={{
-                width: 8,
-                height: 8,
-                borderRadius: '50%',
-                background: 'var(--moss)',
-                animation: `bounce 1.4s ease-in-out ${delay}s infinite`,
-              }}
-            />
-          ))}
-        </div>
+          <span />
+          <span />
+          <span />
+        </span>
       </div>
     </div>
   )

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { api, type ConnectorToken } from '../api/client'
+import { Button } from '../components/Button'
 
 type ClientKey = 'claude-desktop' | 'cursor' | 'windsurf'
 
@@ -119,285 +120,271 @@ export function Connect() {
 
   const client = CLIENTS.find((c) => c.key === activeClient) ?? CLIENTS[0]
 
+  const cmdRowStyle: React.CSSProperties = {
+    display: 'flex',
+    gap: 8,
+    alignItems: 'center',
+    marginTop: 'var(--sp-4)',
+    flexWrap: 'wrap',
+  }
+  const cmdCodeStyle: React.CSSProperties = {
+    flex: 1,
+    minWidth: 0,
+    marginTop: 0,
+    padding: '12px 14px',
+    fontSize: 13,
+    color: 'var(--ink)',
+    wordBreak: 'break-all',
+  }
+
   return (
     <>
       <div className="page-head">
         <div className="page-eye">
-          <span className="glyph">◈</span> Connector
+          <span className="glyph">◈</span> Account
         </div>
         <h1 className="page-title">
-          Connect Kindred to <em>your AI assistant</em>.
+          Connect to <em>Claude</em>
         </h1>
         <p className="page-sub">
-          Two minutes. Paste these into your AI assistant&apos;s connector settings. Once connected,
-          the three slash commands light up.
+          Two minutes to wire Kindred into Claude (or Cursor / Windsurf — pick a tab below). Once
+          connected, the three slash commands light up.
         </p>
       </div>
 
-      <div
-        style={{
-          background: 'var(--bg-elevated)',
-          border: '1px solid var(--border)',
-          borderRadius: 'var(--r-lg)',
-          padding: 'var(--sp-5)',
-          marginBottom: 'var(--sp-5)',
-        }}
+      <ol
+        className="steps steps-stack"
+        style={{ listStyle: 'none', paddingLeft: 0, margin: 0 }}
       >
-        {/* Step 1 */}
-        <div className="entry-section-eye">Step 1 · MCP server URL</div>
-        <div
-          style={{
-            display: 'flex',
-            gap: 8,
-            alignItems: 'center',
-            marginBottom: 'var(--sp-4)',
-          }}
-        >
-          <code
-            style={{
-              flex: 1,
-              padding: '12px 14px',
-              background: 'var(--paper-2)',
-              border: '1px solid var(--border)',
-              borderRadius: 'var(--r-md)',
-              fontFamily: 'var(--font-mono)',
-              fontSize: 13,
-              color: 'var(--ink)',
-              wordBreak: 'break-all',
-            }}
-          >
-            {MCP_URL}
-          </code>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => void copy(MCP_URL)}
-          >
-            Copy
-          </button>
-        </div>
+        {/* Step 1 — MCP URL */}
+        <li className="step">
+          <div className="step-num">
+            <span>Step 01</span>
+            <span className="glyph">✶</span>
+          </div>
+          <h3>
+            Add the <em>MCP URL</em>
+          </h3>
+          <p>This is the server your AI assistant will talk to.</p>
+          <div style={cmdRowStyle}>
+            <code className="step-cmd" style={cmdCodeStyle}>
+              {MCP_URL}
+            </code>
+            <Button variant="secondary" onClick={() => void copy(MCP_URL)}>
+              Copy
+            </Button>
+          </div>
+        </li>
 
-        {/* Step 2 */}
-        <div className="entry-section-eye">Step 2 · Connector token</div>
-        <div
-          role="note"
-          style={{
-            background: 'var(--paper-2)',
-            border: '1px solid var(--rust-2, var(--rust))',
-            borderLeftWidth: 3,
-            borderRadius: 'var(--r-md)',
-            padding: '10px 14px',
-            marginBottom: 'var(--sp-3)',
-            fontSize: 13,
-            color: 'var(--ink-2)',
-            lineHeight: 1.5,
-          }}
-        >
-          <strong>Treat this token like a password.</strong> Anyone who has it
-          can read your journal. Don&apos;t paste it into chat, screenshots, or
-          shared docs.
-        </div>
-        <div
-          style={{
-            display: 'flex',
-            gap: 8,
-            alignItems: 'center',
-            marginBottom: token?.expires_at ? 4 : 'var(--sp-4)',
-          }}
-        >
-          <code
-            style={{
-              flex: 1,
-              padding: '12px 14px',
-              background: 'var(--paper-2)',
-              border: '1px solid var(--border)',
-              borderRadius: 'var(--r-md)',
-              fontFamily: 'var(--font-mono)',
-              fontSize: 13,
-              color: token ? 'var(--ink)' : 'var(--ink-3)',
-              wordBreak: 'break-all',
-            }}
-          >
-            {token ? token.token : 'kdr_••••••••••••••••••••••••'}
-          </code>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => void mint()}
-          >
-            {token ? 'Rotate' : 'Mint token'}
-          </button>
-          {token && (
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => void copy(token.token)}
-            >
-              {copied ? 'Copied' : 'Copy'}
-            </button>
-          )}
-        </div>
-
-        {token?.expires_at && (
-          <p
-            style={{
-              fontSize: 12,
-              color: 'var(--ink-3)',
-              margin: '0 0 var(--sp-4)',
-            }}
-          >
-            Expires {new Date(token.expires_at).toLocaleDateString()}
-          </p>
-        )}
-
-        {error && (
-          <p style={{ color: 'var(--rust)', fontSize: 13, margin: '0 0 var(--sp-3)' }}>
-            {error}
-          </p>
-        )}
-
-        {/* Step 3 — per-client tabs */}
-        <div className="entry-section-eye">Step 3 · Set up your AI</div>
-
-        <div
-          role="tablist"
-          aria-label="AI client"
-          style={{
-            display: 'flex',
-            gap: 0,
-            borderBottom: '1px solid var(--border)',
-            marginBottom: 'var(--sp-4)',
-            flexWrap: 'wrap',
-          }}
-        >
-          {CLIENTS.map((c) => {
-            const isActive = c.key === activeClient
-            return (
-              <button
-                key={c.key}
-                type="button"
-                role="tab"
-                aria-selected={isActive}
-                onClick={() => setActiveClient(c.key)}
-                style={{
-                  background: isActive ? 'var(--bg-elevated)' : 'transparent',
-                  border: 'none',
-                  borderBottom: isActive
-                    ? '2px solid var(--terracotta)'
-                    : '2px solid transparent',
-                  marginBottom: -1,
-                  padding: '10px 16px',
-                  fontFamily: 'var(--font-sans)',
-                  fontSize: 14,
-                  color: isActive ? 'var(--ink)' : 'var(--ink-3)',
-                  cursor: 'pointer',
-                  fontWeight: isActive ? 500 : 400,
-                }}
-              >
-                {c.label}
-              </button>
-            )
-          })}
-        </div>
-
-        <div role="tabpanel" aria-label={`${client.label} setup`}>
-          <div className="entry-section-eye">Step 1 · Add the MCP server</div>
-          <p
-            style={{
-              color: 'var(--ink-2)',
-              fontSize: 14,
-              lineHeight: 1.55,
-              margin: '8px 0 var(--sp-4)',
-              maxWidth: '64ch',
-            }}
-          >
-            {client.addServer}
-          </p>
-
-          <div className="entry-section-eye">Step 2 · Custom instruction</div>
-          <p
-            style={{
-              color: 'var(--ink-2)',
-              fontSize: 14,
-              lineHeight: 1.55,
-              margin: '8px 0 var(--sp-3)',
-              maxWidth: '64ch',
-            }}
-          >
-            {client.oneLinerHint}
-          </p>
+        {/* Step 2 — Connector token */}
+        <li className="step">
+          <div className="step-num">
+            <span>Step 02</span>
+            <span className="glyph">✶</span>
+          </div>
+          <h3>
+            Mint a <em>connector token</em>
+          </h3>
+          <p>Mint once, paste into your AI assistant&apos;s connector settings.</p>
           <div
+            role="note"
             style={{
-              display: 'flex',
-              gap: 8,
-              alignItems: 'center',
-              marginBottom: 'var(--sp-4)',
+              background: 'var(--paper-2)',
+              border: '1px solid var(--rust-2, var(--rust))',
+              borderLeftWidth: 3,
+              borderRadius: 'var(--r-md)',
+              padding: '10px 14px',
+              marginTop: 'var(--sp-3)',
+              fontSize: 13,
+              color: 'var(--ink-2)',
+              lineHeight: 1.5,
             }}
           >
+            <strong>Treat this token like a password.</strong> Anyone who has it can read your
+            journal. Don&apos;t paste it into chat, screenshots, or shared docs.
+          </div>
+          <div style={cmdRowStyle}>
             <code
+              className="step-cmd"
               style={{
-                flex: 1,
-                padding: '12px 14px',
-                background: 'var(--paper-2)',
-                border: '1px solid var(--border)',
-                borderRadius: 'var(--r-md)',
-                fontFamily: 'var(--font-mono)',
-                fontSize: 13,
-                color: 'var(--ink)',
-                wordBreak: 'break-word',
+                ...cmdCodeStyle,
+                color: token ? 'var(--ink)' : 'var(--ink-3)',
               }}
             >
-              {ONE_LINER}
+              {token ? token.token : 'kdr_••••••••••••••••••••••••'}
             </code>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => void copy(ONE_LINER)}
+            <Button variant="secondary" onClick={() => void mint()}>
+              {token ? 'Rotate' : 'Mint token'}
+            </Button>
+            {token && (
+              <Button variant="secondary" onClick={() => void copy(token.token)}>
+                {copied ? 'Copied' : 'Copy'}
+              </Button>
+            )}
+          </div>
+          {token?.expires_at && (
+            <p
+              style={{
+                fontSize: 12,
+                color: 'var(--ink-3)',
+                margin: 'var(--sp-2) 0 0',
+              }}
             >
-              Copy
-            </button>
+              Expires {new Date(token.expires_at).toLocaleDateString()}
+            </p>
+          )}
+          {error && (
+            <p
+              style={{
+                color: 'var(--rust)',
+                fontSize: 13,
+                margin: 'var(--sp-3) 0 0',
+              }}
+            >
+              {error}
+            </p>
+          )}
+        </li>
+
+        {/* Step 3 — Set up your AI assistant */}
+        <li className="step">
+          <div className="step-num">
+            <span>Step 03</span>
+            <span className="glyph">✶</span>
+          </div>
+          <h3>
+            Set up your <em>AI assistant</em>
+          </h3>
+          <p>Pick your client below — the per-step instructions will adjust.</p>
+
+          <div
+            role="tablist"
+            aria-label="AI client"
+            style={{
+              display: 'flex',
+              gap: 0,
+              borderBottom: '1px solid var(--border)',
+              marginTop: 'var(--sp-4)',
+              marginBottom: 'var(--sp-4)',
+              flexWrap: 'wrap',
+            }}
+          >
+            {CLIENTS.map((c) => {
+              const isActive = c.key === activeClient
+              return (
+                <button
+                  key={c.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  onClick={() => setActiveClient(c.key)}
+                  style={{
+                    background: isActive ? 'var(--bg-elevated)' : 'transparent',
+                    border: 'none',
+                    borderBottom: isActive
+                      ? '2px solid var(--terracotta)'
+                      : '2px solid transparent',
+                    marginBottom: -1,
+                    padding: '10px 16px',
+                    fontFamily: 'var(--font-sans)',
+                    fontSize: 14,
+                    color: isActive ? 'var(--ink)' : 'var(--ink-3)',
+                    cursor: 'pointer',
+                    fontWeight: isActive ? 500 : 400,
+                  }}
+                >
+                  {c.label}
+                </button>
+              )
+            })}
           </div>
 
-          <div className="entry-section-eye">Step 3 · Test it</div>
-          <p
-            style={{
-              color: 'var(--ink-2)',
-              fontSize: 14,
-              lineHeight: 1.55,
-              margin: '8px 0 var(--sp-4)',
-              maxWidth: '64ch',
-            }}
-          >
-            {client.testHint}
-          </p>
+          <div role="tabpanel" aria-label={`${client.label} setup`}>
+            <div className="entry-section-eye">Step 1 · Add the MCP server</div>
+            <p
+              style={{
+                color: 'var(--ink-2)',
+                fontSize: 14,
+                lineHeight: 1.55,
+                margin: '8px 0 var(--sp-4)',
+                maxWidth: '64ch',
+              }}
+            >
+              {client.addServer}
+            </p>
 
-          <div className="entry-section-eye">Step 4 · Troubleshooting</div>
-          <ul
-            style={{
-              color: 'var(--ink-2)',
-              fontSize: 14,
-              lineHeight: 1.55,
-              margin: '8px 0 0',
-              paddingLeft: 20,
-              maxWidth: '64ch',
-            }}
-          >
-            {client.troubleshooting.map((t) => (
-              <li key={t.issue} style={{ marginBottom: 6 }}>
-                <strong>{t.issue}</strong> — {t.fix}
-              </li>
-            ))}
-          </ul>
-          <a
-            href={client.docsUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{ color: 'var(--terracotta)', fontSize: 14, display: 'inline-block', marginTop: 'var(--sp-3)' }}
-          >
-            Official docs →
-          </a>
-        </div>
-      </div>
+            <div className="entry-section-eye">Step 2 · Custom instruction</div>
+            <p
+              style={{
+                color: 'var(--ink-2)',
+                fontSize: 14,
+                lineHeight: 1.55,
+                margin: '8px 0 var(--sp-3)',
+                maxWidth: '64ch',
+              }}
+            >
+              {client.oneLinerHint}
+            </p>
+            <div style={{ ...cmdRowStyle, marginTop: 0 }}>
+              <code
+                className="step-cmd"
+                style={{ ...cmdCodeStyle, wordBreak: 'break-word' }}
+              >
+                {ONE_LINER}
+              </code>
+              <Button variant="secondary" onClick={() => void copy(ONE_LINER)}>
+                Copy
+              </Button>
+            </div>
+
+            <div className="entry-section-eye" style={{ marginTop: 'var(--sp-4)' }}>
+              Step 3 · Test it
+            </div>
+            <p
+              style={{
+                color: 'var(--ink-2)',
+                fontSize: 14,
+                lineHeight: 1.55,
+                margin: '8px 0 var(--sp-4)',
+                maxWidth: '64ch',
+              }}
+            >
+              {client.testHint}
+            </p>
+
+            <div className="entry-section-eye">Step 4 · Troubleshooting</div>
+            <ul
+              style={{
+                color: 'var(--ink-2)',
+                fontSize: 14,
+                lineHeight: 1.55,
+                margin: '8px 0 0',
+                paddingLeft: 20,
+                maxWidth: '64ch',
+              }}
+            >
+              {client.troubleshooting.map((t) => (
+                <li key={t.issue} style={{ marginBottom: 6 }}>
+                  <strong>{t.issue}</strong> — {t.fix}
+                </li>
+              ))}
+            </ul>
+            <a
+              href={client.docsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                color: 'var(--terracotta)',
+                fontSize: 14,
+                display: 'inline-block',
+                marginTop: 'var(--sp-3)',
+              }}
+            >
+              Official docs →
+            </a>
+          </div>
+        </li>
+      </ol>
     </>
   )
 }
