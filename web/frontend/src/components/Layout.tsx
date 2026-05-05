@@ -196,7 +196,10 @@ export function Layout() {
           </div>
           <button
             type="button"
-            onClick={() => void supabase.auth.signOut()}
+            onClick={() => {
+              useNavCounts.setState({ entryCount: null, patternCount: null })
+              void supabase.auth.signOut()
+            }}
             style={{
               marginLeft: 'auto',
               background: 'none',

@@ -27,13 +27,20 @@ export function Home() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    let stale = false
     api
       .get<EntrySummary[]>('/entries')
       .then((arr) => {
+        if (stale) return
         setEntries(arr)
         useNavCounts.getState().setEntryCount(arr.length)
       })
-      .catch((e: Error) => setError(e.message))
+      .catch((e: Error) => {
+        if (!stale) setError(e.message)
+      })
+    return () => {
+      stale = true
+    }
   }, [])
 
   const byMonth = entries ? groupByMonth(entries) : {}

@@ -246,4 +246,23 @@ describe('Layout — sidebar nav', () => {
       screen.getByRole('link', { name: /connect to claude/i }),
     ).toBeInTheDocument()
   })
+
+  it('renders a "0" badge when count is loaded as zero (distinguishes 0 from null)', () => {
+    navState.entryCount = 0
+    navState.patternCount = 0
+    try {
+      const { container } = render(
+        <MemoryRouter initialEntries={['/app']}>
+          <Layout />
+        </MemoryRouter>,
+      )
+      const entriesLink = findSideLink(container, 'Entries')
+      const patternsLink = findSideLink(container, 'Patterns')
+      expect(entriesLink?.querySelector('.count')?.textContent).toBe('0')
+      expect(patternsLink?.querySelector('.count')?.textContent).toBe('0')
+    } finally {
+      navState.entryCount = null
+      navState.patternCount = null
+    }
+  })
 })

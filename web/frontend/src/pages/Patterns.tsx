@@ -8,13 +8,20 @@ export function Patterns() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    let stale = false
     api
       .get<Pattern[]>('/patterns')
       .then((arr) => {
+        if (stale) return
         setPatterns(arr)
         useNavCounts.getState().setPatternCount(arr.length)
       })
-      .catch((e: Error) => setError(e.message))
+      .catch((e: Error) => {
+        if (!stale) setError(e.message)
+      })
+    return () => {
+      stale = true
+    }
   }, [])
 
   if (error) return <p style={{ color: 'var(--rust)' }}>{error}</p>
