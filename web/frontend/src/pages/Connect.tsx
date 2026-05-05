@@ -205,38 +205,21 @@ export function Connect() {
             marginBottom: token?.expires_at ? 4 : 'var(--sp-4)',
           }}
         >
-          {token ? (
-            <code
-              style={{
-                flex: 1,
-                padding: '12px 14px',
-                background: 'var(--paper-2)',
-                border: '1px solid var(--border)',
-                borderRadius: 'var(--r-md)',
-                fontFamily: 'var(--font-mono)',
-                fontSize: 13,
-                color: 'var(--ink)',
-                wordBreak: 'break-all',
-              }}
-            >
-              {token.token}
-            </code>
-          ) : (
-            <code
-              style={{
-                flex: 1,
-                padding: '12px 14px',
-                background: 'var(--paper-2)',
-                border: '1px solid var(--border)',
-                borderRadius: 'var(--r-md)',
-                fontFamily: 'var(--font-mono)',
-                fontSize: 13,
-                color: 'var(--ink-3)',
-              }}
-            >
-              kdr_••••••••••••••••••••••••
-            </code>
-          )}
+          <code
+            style={{
+              flex: 1,
+              padding: '12px 14px',
+              background: 'var(--paper-2)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--r-md)',
+              fontFamily: 'var(--font-mono)',
+              fontSize: 13,
+              color: token ? 'var(--ink)' : 'var(--ink-3)',
+              wordBreak: 'break-all',
+            }}
+          >
+            {token ? token.token : 'kdr_••••••••••••••••••••••••'}
+          </code>
           <button
             type="button"
             className="btn btn-secondary"

@@ -46,14 +46,7 @@ async def update_settings(
     user: dict[str, Any] = Depends(get_current_user),
 ) -> dict[str, Any]:
     current = dict(cast(dict[str, Any], user.get("user_metadata") or {}))
-    if patch.timezone is not None:
-        current["timezone"] = patch.timezone
-    if patch.transcript_enabled is not None:
-        current["transcript_enabled"] = patch.transcript_enabled
-    if patch.crisis_disclaimer_acknowledged_at is not None:
-        current["crisis_disclaimer_acknowledged_at"] = (
-            patch.crisis_disclaimer_acknowledged_at
-        )
+    current.update(patch.model_dump(exclude_none=True))
     merged = await db.update_user_metadata(user["jwt"], current)
     return {
         "timezone": merged.get("timezone"),
