@@ -9,20 +9,19 @@ function weekBars(
   lastSeenAt: string,
   now: Date,
 ): { isMonth: boolean; height: number }[] {
-  const lastSeen = new Date(lastSeenAt)
-  const lastSeenValid = !isNaN(lastSeen.getTime())
-  const lastSeenWeeksAgo = lastSeenValid
-    ? Math.floor((now.getTime() - lastSeen.getTime()) / MS_PER_WEEK)
-    : -1
+  const lastSeenMs = new Date(lastSeenAt).getTime()
+  const lastSeenWeeksAgo = isNaN(lastSeenMs)
+    ? -1
+    : Math.floor((now.getTime() - lastSeenMs) / MS_PER_WEEK)
   return Array.from({ length: 12 }, (_, i) => {
+    const weeksAgo = 11 - i
     // Decorative bucketing: weekStart is UTC-derived, month check uses local time.
     // At most one bar may shift class around month boundaries — acceptable.
-    const weekStart = new Date(now.getTime() - (11 - i) * MS_PER_WEEK)
+    const weekStart = new Date(now.getTime() - weeksAgo * MS_PER_WEEK)
     const isMonth =
       weekStart.getFullYear() === now.getFullYear() &&
       weekStart.getMonth() === now.getMonth()
-    const isLastSeenWeek = lastSeenWeeksAgo === 11 - i
-    return { isMonth, height: isLastSeenWeek ? 24 : 4 }
+    return { isMonth, height: weeksAgo === lastSeenWeeksAgo ? 24 : 4 }
   })
 }
 
