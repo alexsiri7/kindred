@@ -42,6 +42,10 @@ cd web/frontend && npm install && npm run dev
 
 See [docs/setup.md](docs/setup.md) for client-specific setup (Claude Projects, ChatGPT, Gemini Gems).
 
+## Deployment
+
+Both services deploy via Railway's GitHub integration. Before changing any `Dockerfile`, `railway.toml`, or the `lib/` layout, see [docs/runbook-railway.md](docs/runbook-railway.md) for the per-service Railway dashboard contract (Root Directory, Config-as-code Path, build args).
+
 ## Development
 
 ```bash

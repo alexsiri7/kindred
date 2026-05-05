@@ -43,6 +43,9 @@ If you move, rename, or split a service directory, **also update**:
 2. The Railway dashboard `Config-as-code Path` if the toml file moved.
 3. Any `COPY <path>` lines in the Dockerfile.
 4. Any service-specific `Root Directory` in the Railway dashboard.
+5. The Service tables in this runbook (`docs/runbook-railway.md`).
+6. The web service's `Required build args` list (here and the `ARG`
+   lines in `web/Dockerfile`) if a `VITE_*` variable is added or removed.
 
 CI (`scripts/gates.sh`) does not build Docker images, so these
 mismatches will not fail until the next prod deploy.
