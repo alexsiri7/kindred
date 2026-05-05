@@ -3,6 +3,27 @@ import { Link } from 'react-router'
 import { api, type Pattern } from '../api/client'
 import { useNavCounts } from '../store/navCounts'
 
+const MS_PER_WEEK = 7 * 24 * 60 * 60 * 1000
+
+function weekBars(
+  lastSeenAt: string,
+  now: Date,
+): { isMonth: boolean; height: number }[] {
+  const lastSeen = new Date(lastSeenAt)
+  const lastSeenValid = !isNaN(lastSeen.getTime())
+  const lastSeenWeeksAgo = lastSeenValid
+    ? Math.floor((now.getTime() - lastSeen.getTime()) / MS_PER_WEEK)
+    : -1
+  return Array.from({ length: 12 }, (_, i) => {
+    const weekStart = new Date(now.getTime() - (11 - i) * MS_PER_WEEK)
+    const isMonth =
+      weekStart.getFullYear() === now.getFullYear() &&
+      weekStart.getMonth() === now.getMonth()
+    const isLastSeenWeek = lastSeenWeeksAgo === 11 - i
+    return { isMonth, height: isLastSeenWeek ? 24 : 4 }
+  })
+}
+
 export function Patterns() {
   const [patterns, setPatterns] = useState<Pattern[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -30,6 +51,7 @@ export function Patterns() {
   const sorted = [...patterns].sort(
     (a, b) => new Date(b.last_seen_at).getTime() - new Date(a.last_seen_at).getTime(),
   )
+  const now = new Date()
 
   return (
     <>
@@ -41,7 +63,8 @@ export function Patterns() {
           What <em>keeps</em> coming back
         </h1>
         <p className="page-sub">
-          Sorted by when you last saw them. Each one is named in your words.
+          The recurring emotional patterns you and your guide have named — sorted by when
+          you last saw them.
         </p>
       </div>
 
@@ -64,6 +87,7 @@ export function Patterns() {
             month: 'short',
             day: 'numeric',
           })
+          const bars = weekBars(p.last_seen_at, now)
           return (
             <Link
               key={p.id}
@@ -78,6 +102,15 @@ export function Patterns() {
                 <div className="pat-card-stats">
                   <span className="big">×{p.occurrence_count}</span>
                   last seen {lastSeen}
+                  <div className="sparkline">
+                    {bars.map((bar, i) => (
+                      <span
+                        key={`bar-${i}`}
+                        className={bar.isMonth ? 'is-month' : ''}
+                        style={{ height: bar.height }}
+                      />
+                    ))}
+                  </div>
                 </div>
               </div>
             </Link>

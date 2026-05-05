@@ -360,7 +360,7 @@ button { font-family: inherit; }
 
 /* sparkline of recent activity */
 .sparkline { display: flex; align-items: flex-end; gap: 3px; height: 24px; margin-top: 6px; justify-content: flex-end; }
-.sparkline span { width: 6px; background: var(--terracotta-3); border-radius: 1px; }
+.sparkline span { width: 6px; background: var(--paper-3); border-radius: 1px; }
 .sparkline span.is-month { background: var(--terracotta); }
 
 /* ============================================================
