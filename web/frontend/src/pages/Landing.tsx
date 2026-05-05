@@ -8,21 +8,50 @@ import { useAuth } from '../store/auth'
    ============================================================ */
 function Nav() {
   const session = useAuth((s) => s.session)
+  const [activeId, setActiveId] = useState<string>(() =>
+    typeof window !== 'undefined' ? window.location.hash.slice(1) : '',
+  )
+
+  useEffect(() => {
+    const ids = ['how', 'demo', 'patterns']
+    const sections = ids
+      .map((id) => document.getElementById(id))
+      .filter((el): el is HTMLElement => el !== null)
+    if (sections.length === 0) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0]
+        if (visible) setActiveId(visible.target.id)
+      },
+      { rootMargin: '-20% 0px -60% 0px', threshold: [0, 0.5, 1] },
+    )
+    sections.forEach((s) => observer.observe(s))
+    return () => observer.disconnect()
+  }, [])
+
+  const linkClass = (id: string) =>
+    `nav-link${activeId === id ? ' is-active' : ''}`
+  const ariaCurrent = (id: string): 'location' | undefined =>
+    activeId === id ? 'location' : undefined
+
   return (
     <nav className="nav">
       <Link to="/" style={{ textDecoration: 'none' }}>
         <KindredWordmark markSize={26} />
       </Link>
       <div className="nav-links">
-        <a href="#how" className="nav-link">How it works</a>
-        <a href="#demo" className="nav-link">Demo</a>
-        <a href="#patterns" className="nav-link">Patterns</a>
+        <a href="#how" className={linkClass('how')} aria-current={ariaCurrent('how')}>How it works</a>
+        <a href="#demo" className={linkClass('demo')} aria-current={ariaCurrent('demo')}>A session</a>
+        <a href="#patterns" className={linkClass('patterns')} aria-current={ariaCurrent('patterns')}>Patterns</a>
         <Link to="/privacy" className="nav-link">Privacy</Link>
       </div>
       <div className="nav-cta">
         {session
           ? <Link to="/app" className="nav-link">Open app</Link>
-          : <Link to="/login" className="nav-link">Sign in</Link>
+          : <Link to="/login" className="btn btn-ghost btn-sm">Sign in</Link>
         }
         <Link to="/app" className="btn btn-primary btn-sm">Connect your AI</Link>
       </div>
@@ -187,19 +216,17 @@ function HowItWorks() {
    Conversation demo
    ============================================================ */
 type ScriptItem =
-  | { kind: 'user' | 'kindred'; from: string; text: React.ReactNode; delay: number }
+  | { kind: 'user' | 'kindred'; text: React.ReactNode; delay: number }
   | { kind: 'tool'; delay: number; name: string; args: string; result: string }
 
 const SCRIPT: ScriptItem[] = [
   {
     kind: 'user',
-    from: 'You',
     delay: 600,
     text: <p>Hey.</p>,
   },
   {
     kind: 'kindred',
-    from: 'Kindred',
     delay: 900,
     text: (
       <p>
@@ -209,7 +236,6 @@ const SCRIPT: ScriptItem[] = [
   },
   {
     kind: 'user',
-    from: 'You',
     delay: 1100,
     text: (
       <p>
@@ -220,7 +246,6 @@ const SCRIPT: ScriptItem[] = [
   },
   {
     kind: 'kindred',
-    from: 'Kindred',
     delay: 1300,
     text: (
       <>
@@ -234,7 +259,6 @@ const SCRIPT: ScriptItem[] = [
   },
   {
     kind: 'user',
-    from: 'You',
     delay: 1200,
     text: (
       <p>
@@ -246,7 +270,6 @@ const SCRIPT: ScriptItem[] = [
   },
   {
     kind: 'kindred',
-    from: 'Kindred',
     delay: 1300,
     text: (
       <p>
@@ -258,7 +281,6 @@ const SCRIPT: ScriptItem[] = [
   },
   {
     kind: 'user',
-    from: 'You',
     delay: 800,
     text: <p>Yeah, let&apos;s look at it.</p>,
   },
@@ -271,7 +293,6 @@ const SCRIPT: ScriptItem[] = [
   },
   {
     kind: 'kindred',
-    from: 'Kindred',
     delay: 1100,
     text: (
       <p>
@@ -282,7 +303,6 @@ const SCRIPT: ScriptItem[] = [
   },
   {
     kind: 'user',
-    from: 'You',
     delay: 1100,
     text: (
       <p>
@@ -293,7 +313,6 @@ const SCRIPT: ScriptItem[] = [
   },
   {
     kind: 'kindred',
-    from: 'Kindred',
     delay: 1300,
     text: (
       <p>
@@ -304,13 +323,11 @@ const SCRIPT: ScriptItem[] = [
   },
   {
     kind: 'user',
-    from: 'You',
     delay: 1000,
     text: <p>Shallow breath. And my jaw is doing a thing.</p>,
   },
   {
     kind: 'kindred',
-    from: 'Kindred',
     delay: 1300,
     text: (
       <p>
@@ -319,7 +336,7 @@ const SCRIPT: ScriptItem[] = [
       </p>
     ),
   },
-  { kind: 'user', from: 'You', delay: 900, text: <p>Same one. Definitely.</p> },
+  { kind: 'user', delay: 900, text: <p>Same one. Definitely.</p> },
   {
     kind: 'tool',
     delay: 700,
@@ -329,7 +346,6 @@ const SCRIPT: ScriptItem[] = [
   },
   {
     kind: 'kindred',
-    from: 'Kindred',
     delay: 1100,
     text: <p>Logged. Want to keep talking, or close out for now?</p>,
   },
@@ -348,17 +364,11 @@ function Conversation() {
 
     const item = SCRIPT[step]
     const showTyping = item.kind === 'kindred'
-    if (showTyping) {
-      setTyping(true)
-      timerRef.current = setTimeout(() => {
-        setTyping(false)
-        setStep((s) => s + 1)
-      }, item.delay)
-    } else {
-      timerRef.current = setTimeout(() => {
-        setStep((s) => s + 1)
-      }, item.delay)
-    }
+    if (showTyping) setTyping(true)
+    timerRef.current = setTimeout(() => {
+      if (showTyping) setTyping(false)
+      setStep((s) => s + 1)
+    }, item.delay)
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current)
     }
@@ -495,7 +505,7 @@ function Conversation() {
                     {m.kind === 'kindred' ? 'K' : 'A'}
                   </div>
                   <div className="msg-body">
-                    <span className="msg-from">{m.from}</span>
+                    <span className="msg-from">{m.kind === 'kindred' ? 'Kindred' : 'You'}</span>
                     <div className="msg-text">{m.text}</div>
                   </div>
                 </div>
