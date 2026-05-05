@@ -78,6 +78,25 @@ describe('Settings — connector tokens section', () => {
     ).toBeInTheDocument()
   })
 
+  it('toggling Save transcripts patches /settings with transcript_enabled', async () => {
+    mockEndpoints([])
+    apiPatch.mockResolvedValueOnce({
+      ...SETTINGS_RESPONSE,
+      transcript_enabled: false,
+    })
+
+    render(<Settings />)
+
+    const label = await screen.findByText(/On — summary \+ transcript/i)
+    fireEvent.click(label.closest('label')!)
+
+    await waitFor(() => {
+      expect(apiPatch).toHaveBeenCalledWith('/settings', {
+        transcript_enabled: false,
+      })
+    })
+  })
+
   it('renders an active token row with status, created date, and last used', async () => {
     mockEndpoints([ACTIVE_TOKEN])
     render(<Settings />)
