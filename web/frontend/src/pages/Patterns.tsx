@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { api, type Pattern } from '../api/client'
+import { useNavCounts } from '../store/navCounts'
 
 export function Patterns() {
   const [patterns, setPatterns] = useState<Pattern[] | null>(null)
@@ -9,7 +10,10 @@ export function Patterns() {
   useEffect(() => {
     api
       .get<Pattern[]>('/patterns')
-      .then(setPatterns)
+      .then((arr) => {
+        setPatterns(arr)
+        useNavCounts.getState().setPatternCount(arr.length)
+      })
       .catch((e: Error) => setError(e.message))
   }, [])
 
