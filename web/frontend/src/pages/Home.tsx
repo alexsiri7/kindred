@@ -22,6 +22,10 @@ function groupByMonth(entries: EntrySummary[]): Record<string, EntrySummary[]> {
   return groups
 }
 
+function truncate(s: string, n: number): string {
+  return s.length > n ? s.slice(0, n) + '…' : s
+}
+
 export function Home() {
   const [entries, setEntries] = useState<EntrySummary[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -79,12 +83,8 @@ export function Home() {
           <div className="month-div">{month}</div>
           {items.map((entry) => {
             const { day, weekday } = formatEntryDate(entry.date)
-            const title = entry.summary.length > 80
-              ? entry.summary.slice(0, 80) + '…'
-              : entry.summary
-            const body = entry.summary.length > 200
-              ? entry.summary.slice(0, 200) + '…'
-              : entry.summary
+            const title = truncate(entry.summary, 80)
+            const body = truncate(entry.summary, 200)
 
             return (
               <Link
