@@ -216,19 +216,17 @@ function HowItWorks() {
    Conversation demo
    ============================================================ */
 type ScriptItem =
-  | { kind: 'user' | 'kindred'; from: string; text: React.ReactNode; delay: number }
+  | { kind: 'user' | 'kindred'; text: React.ReactNode; delay: number }
   | { kind: 'tool'; delay: number; name: string; args: string; result: string }
 
 const SCRIPT: ScriptItem[] = [
   {
     kind: 'user',
-    from: 'You',
     delay: 600,
     text: <p>Hey.</p>,
   },
   {
     kind: 'kindred',
-    from: 'Kindred',
     delay: 900,
     text: (
       <p>
@@ -238,7 +236,6 @@ const SCRIPT: ScriptItem[] = [
   },
   {
     kind: 'user',
-    from: 'You',
     delay: 1100,
     text: (
       <p>
@@ -249,7 +246,6 @@ const SCRIPT: ScriptItem[] = [
   },
   {
     kind: 'kindred',
-    from: 'Kindred',
     delay: 1300,
     text: (
       <>
@@ -263,7 +259,6 @@ const SCRIPT: ScriptItem[] = [
   },
   {
     kind: 'user',
-    from: 'You',
     delay: 1200,
     text: (
       <p>
@@ -275,7 +270,6 @@ const SCRIPT: ScriptItem[] = [
   },
   {
     kind: 'kindred',
-    from: 'Kindred',
     delay: 1300,
     text: (
       <p>
@@ -287,7 +281,6 @@ const SCRIPT: ScriptItem[] = [
   },
   {
     kind: 'user',
-    from: 'You',
     delay: 800,
     text: <p>Yeah, let&apos;s look at it.</p>,
   },
@@ -300,7 +293,6 @@ const SCRIPT: ScriptItem[] = [
   },
   {
     kind: 'kindred',
-    from: 'Kindred',
     delay: 1100,
     text: (
       <p>
@@ -311,7 +303,6 @@ const SCRIPT: ScriptItem[] = [
   },
   {
     kind: 'user',
-    from: 'You',
     delay: 1100,
     text: (
       <p>
@@ -322,7 +313,6 @@ const SCRIPT: ScriptItem[] = [
   },
   {
     kind: 'kindred',
-    from: 'Kindred',
     delay: 1300,
     text: (
       <p>
@@ -333,13 +323,11 @@ const SCRIPT: ScriptItem[] = [
   },
   {
     kind: 'user',
-    from: 'You',
     delay: 1000,
     text: <p>Shallow breath. And my jaw is doing a thing.</p>,
   },
   {
     kind: 'kindred',
-    from: 'Kindred',
     delay: 1300,
     text: (
       <p>
@@ -348,7 +336,7 @@ const SCRIPT: ScriptItem[] = [
       </p>
     ),
   },
-  { kind: 'user', from: 'You', delay: 900, text: <p>Same one. Definitely.</p> },
+  { kind: 'user', delay: 900, text: <p>Same one. Definitely.</p> },
   {
     kind: 'tool',
     delay: 700,
@@ -358,7 +346,6 @@ const SCRIPT: ScriptItem[] = [
   },
   {
     kind: 'kindred',
-    from: 'Kindred',
     delay: 1100,
     text: <p>Logged. Want to keep talking, or close out for now?</p>,
   },
@@ -377,17 +364,11 @@ function Conversation() {
 
     const item = SCRIPT[step]
     const showTyping = item.kind === 'kindred'
-    if (showTyping) {
-      setTyping(true)
-      timerRef.current = setTimeout(() => {
-        setTyping(false)
-        setStep((s) => s + 1)
-      }, item.delay)
-    } else {
-      timerRef.current = setTimeout(() => {
-        setStep((s) => s + 1)
-      }, item.delay)
-    }
+    if (showTyping) setTyping(true)
+    timerRef.current = setTimeout(() => {
+      if (showTyping) setTyping(false)
+      setStep((s) => s + 1)
+    }, item.delay)
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current)
     }
@@ -524,7 +505,7 @@ function Conversation() {
                     {m.kind === 'kindred' ? 'K' : 'A'}
                   </div>
                   <div className="msg-body">
-                    <span className="msg-from">{m.from}</span>
+                    <span className="msg-from">{m.kind === 'kindred' ? 'Kindred' : 'You'}</span>
                     <div className="msg-text">{m.text}</div>
                   </div>
                 </div>
