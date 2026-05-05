@@ -65,7 +65,7 @@ export function Search() {
           <span className="glyph">◈</span> Search
         </div>
         <h1 className="page-title">
-          Find by <em>feeling</em>, not just date.
+          <em>Search</em> the archive
         </h1>
         <p className="page-sub">
           Semantic search over your entry summaries. Try phrases — &quot;the bracing feeling&quot;,
@@ -96,6 +96,30 @@ export function Search() {
 
       {error && <p style={{ color: 'var(--rust)' }}>{error}</p>}
       {hits === null && q && <p style={{ color: 'var(--ink-3)' }}>Searching…</p>}
+
+      {!q && hits !== null && (
+        <div
+          style={{
+            textAlign: 'center',
+            padding: 'var(--sp-7) 0',
+            color: 'var(--ink-3)',
+          }}
+        >
+          <div
+            className="eyebrow"
+            style={{ justifyContent: 'center', marginBottom: 'var(--sp-3)' }}
+          >
+            <span className="glyph">◇</span> Try a phrase
+          </div>
+          <p style={{ margin: 0, fontSize: 15, color: 'var(--ink-3)' }}>
+            Search by feeling, not by date.
+          </p>
+        </div>
+      )}
+
+      {q && hits !== null && hits.length === 0 && (
+        <p style={{ color: 'var(--ink-3)' }}>Nothing found for &quot;{q}&quot;.</p>
+      )}
 
       {hits?.map((h) => {
         const date = new Date(h.content.slice(0, 10) + 'T12:00')
