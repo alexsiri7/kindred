@@ -24,3 +24,21 @@ jobs:
 
       - name: Run gates
         run: ./scripts/gates.sh
+
+  docker-build:
+    name: docker build (repo-root context)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build mcp image
+        run: docker build -f mcp/Dockerfile -t kindred-mcp:ci .
+
+      - name: Build web image
+        run: |
+          docker build -f web/Dockerfile \
+            --build-arg VITE_SUPABASE_URL=https://example.invalid \
+            --build-arg VITE_SUPABASE_ANON_KEY=ci-placeholder \
+            --build-arg VITE_API_BASE_URL=https://example.invalid \
+            --build-arg VITE_SENTRY_DSN= \
+            -t kindred-web:ci .
