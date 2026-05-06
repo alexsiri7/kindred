@@ -32,10 +32,9 @@ function TimezoneInput({
       ).slice(0, 10)
     : []
 
-  // reset highlighted index whenever the suggestion list changes
   useEffect(() => {
     setHighlighted(0)
-  }, [suggestions.length, inputVal])
+  }, [inputVal])
 
   const selectTz = (tz: string) => {
     setInputVal(tz)

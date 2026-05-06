@@ -114,7 +114,7 @@ export function Layout() {
   }
 
   const email = session?.user?.email ?? ''
-  const name = email.split('@')[0] ?? 'User'
+  const name = email.split('@')[0]
   const initial = (name[0] ?? '?').toUpperCase()
 
   const isActive = (path: string) => {
