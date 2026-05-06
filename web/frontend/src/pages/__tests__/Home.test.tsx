@@ -45,4 +45,80 @@ describe('Home', () => {
       expect(useNavCounts.getState().entryCount).toBe(3),
     )
   })
+
+  it('renders the title with "Your" as the italic accent', async () => {
+    useNavCounts.setState({ entryCount: null })
+    vi.mocked(api.get).mockResolvedValueOnce([])
+    render(
+      <MemoryRouter>
+        <Home />
+      </MemoryRouter>,
+    )
+    expect(
+      screen.getByRole('heading', { name: /your library/i }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Your', { selector: 'em' })).toBeInTheDocument()
+  })
+
+  it('renders the date column as "{monthShort} · {weekday}"', async () => {
+    useNavCounts.setState({ entryCount: null })
+    vi.mocked(api.get).mockResolvedValueOnce([
+      {
+        id: 'e1',
+        date: '2026-04-04',
+        summary: 'a quiet morning',
+        mood: null,
+        created_at: '2026-04-04T12:00:00Z',
+      },
+    ])
+    render(
+      <MemoryRouter>
+        <Home />
+      </MemoryRouter>,
+    )
+    await waitFor(() => {
+      const matches = screen.getAllByText(/quiet morning/i)
+      expect(matches.length).toBeGreaterThanOrEqual(2)
+    })
+    const dateCell = document.querySelector('.entry-date')
+    expect(dateCell?.querySelector('.day')?.textContent).toBe('4')
+    expect(dateCell?.textContent).toMatch(/Apr · Sat/)
+  })
+
+  it('renders the date column for a December entry', async () => {
+    useNavCounts.setState({ entryCount: null })
+    vi.mocked(api.get).mockResolvedValueOnce([
+      {
+        id: 'e2',
+        date: '2026-12-31',
+        summary: 'year end',
+        mood: null,
+        created_at: '2026-12-31T12:00:00Z',
+      },
+    ])
+    render(
+      <MemoryRouter>
+        <Home />
+      </MemoryRouter>,
+    )
+    await waitFor(() => {
+      expect(screen.getAllByText(/year end/i).length).toBeGreaterThanOrEqual(2)
+    })
+    const dateCell = document.querySelector('.entry-date')
+    expect(dateCell?.querySelector('.day')?.textContent).toBe('31')
+    expect(dateCell?.textContent).toMatch(/Dec · Thu/)
+  })
+
+  it('renders the read-only banner', async () => {
+    useNavCounts.setState({ entryCount: null })
+    vi.mocked(api.get).mockResolvedValueOnce([])
+    render(
+      <MemoryRouter>
+        <Home />
+      </MemoryRouter>,
+    )
+    const readonlyText = screen.getByText(/read-only/i)
+    expect(readonlyText).toBeInTheDocument()
+    expect(readonlyText.closest('.readonly-banner')).not.toBeNull()
+  })
 })

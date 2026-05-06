@@ -8,6 +8,7 @@ function formatEntryDate(dateStr: string) {
   return {
     day: d.getDate().toString(),
     weekday: d.toLocaleDateString('en-US', { weekday: 'short' }),
+    monthShort: d.toLocaleDateString('en-US', { month: 'short' }),
     month: d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
   }
 }
@@ -56,7 +57,7 @@ export function Home() {
           <span className="glyph">◈</span> Journal
         </div>
         <h1 className="page-title">
-          <em>library</em>
+          <em>Your</em> library
         </h1>
         <p className="page-sub">Your entries, kept quietly.</p>
       </div>
@@ -82,7 +83,7 @@ export function Home() {
         <div key={month}>
           <div className="month-div">{month}</div>
           {items.map((entry) => {
-            const { day, weekday } = formatEntryDate(entry.date)
+            const { day, weekday, monthShort } = formatEntryDate(entry.date)
             const title = truncate(entry.summary, 80)
             const body = truncate(entry.summary, 200)
 
@@ -95,7 +96,7 @@ export function Home() {
                 <div className="entry-row">
                   <div className="entry-date">
                     <span className="day">{day}</span>
-                    {weekday}
+                    {monthShort} · {weekday}
                   </div>
                   <div className="entry-body">
                     <h3>{title}</h3>
