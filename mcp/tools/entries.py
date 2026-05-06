@@ -6,11 +6,12 @@ import asyncio
 from typing import Any
 
 from lib.services import entries as entries_service
-from mcp.server.fastmcp.exceptions import ToolError
 
 from auth import current_user_id
+from tools import to_tool_error
 
 
+@to_tool_error
 async def save_entry(
     date: str,
     summary: str,
@@ -24,52 +25,43 @@ async def save_entry(
     per call — same-day callers will produce two rows.
     """
     user_id = current_user_id.get()
-    try:
-        return await asyncio.to_thread(
-            entries_service.save_entry,
-            user_id,
-            None,
-            date,
-            summary,
-            mood,
-            transcript,
-        )
-    except Exception as exc:
-        raise ToolError(str(exc)) from exc
+    return await asyncio.to_thread(
+        entries_service.save_entry,
+        user_id,
+        None,
+        date,
+        summary,
+        mood,
+        transcript,
+    )
 
 
+@to_tool_error
 async def get_entry(
     date: str | None = None,
     id: str | None = None,
 ) -> dict[str, Any]:
     user_id = current_user_id.get()
-    try:
-        return await asyncio.to_thread(
-            entries_service.get_entry_by_date_or_id,
-            user_id,
-            None,
-            date=date,
-            entry_id=id,
-        )
-    except Exception as exc:
-        raise ToolError(str(exc)) from exc
+    return await asyncio.to_thread(
+        entries_service.get_entry_by_date_or_id,
+        user_id,
+        None,
+        date=date,
+        entry_id=id,
+    )
 
 
+@to_tool_error
 async def list_recent_entries(limit: int = 10) -> list[dict[str, Any]]:
     user_id = current_user_id.get()
-    try:
-        return await asyncio.to_thread(
-            entries_service.list_recent_entries, user_id, None, limit
-        )
-    except Exception as exc:
-        raise ToolError(str(exc)) from exc
+    return await asyncio.to_thread(
+        entries_service.list_recent_entries, user_id, None, limit
+    )
 
 
+@to_tool_error
 async def search_entries(query: str, limit: int = 5) -> list[dict[str, Any]]:
     user_id = current_user_id.get()
-    try:
-        return await asyncio.to_thread(
-            entries_service.search_entries, user_id, None, query, limit
-        )
-    except Exception as exc:
-        raise ToolError(str(exc)) from exc
+    return await asyncio.to_thread(
+        entries_service.search_entries, user_id, None, query, limit
+    )
