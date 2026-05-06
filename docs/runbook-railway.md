@@ -47,8 +47,12 @@ If you move, rename, or split a service directory, **also update**:
 6. The web service's `Required build args` list (here and the `ARG`
    lines in `web/Dockerfile`) if a `VITE_*` variable is added or removed.
 
-CI (`scripts/gates.sh`) does not build Docker images, so these
-mismatches will not fail until the next prod deploy.
+CI builds both Dockerfiles at repo-root context (the `docker-build`
+job in `.github/workflows/ci.yml`), so build-context mismatches in
+the Dockerfiles themselves now fail at PR time. The Railway
+dashboard's `Root Directory` and `Config-as-code Path` are still
+implicit and not exercised by CI — drift in those settings will
+still only fail at the next prod deploy.
 
 ## Diagnosing a failed deploy
 
