@@ -63,17 +63,20 @@ is irrelevant — Railway always receives the full repo context including `lib/`
 
 ### One-time operator setup
 
-1. **GitHub secret**: `RAILWAY_TOKEN` — generate a Railway token in Railway →
-   Account → Tokens, then add it in GitHub Settings → Secrets and variables →
-   Actions. The workflow skips silently when the secret is absent.
+1. **Railway dashboard → both services → Settings → Source**:
+   - Disable **Deploy on push** (Railway's GitHub auto-deploy) first, before
+     adding `RAILWAY_TOKEN`, to prevent a brief window where both Railway
+     auto-deploy and CI-deploy fire simultaneously on the next push.
 
-2. **Railway dashboard → `web` service → Settings → Source**:
+2. **GitHub secret**: `RAILWAY_TOKEN` — generate a project-scoped token in
+   Railway → (your project) → Settings → Tokens (not Account → Tokens, to
+   limit blast radius to this project), then add it in GitHub Settings →
+   Secrets and variables → Actions. The workflow skips silently when the
+   secret is absent.
+
+3. **Railway dashboard → `web` service → Settings → Source**:
    - Set **Config-as-code Path**: `web/railway.toml`
      (so `railway up --service web` picks `web/Dockerfile`, not the root MCP config)
-
-3. **Railway dashboard → both services → Settings → Source**:
-   - Disable **Deploy on push** (Railway's GitHub auto-deploy) to prevent
-     double-deploys after this workflow is active.
 
 `VITE_*` build variables stay in Railway — no changes needed there.
 
@@ -82,6 +85,16 @@ is irrelevant — Railway always receives the full repo context including `lib/`
 Every merge to `main` that passes CI triggers one CI-managed deploy per service.
 The Root Directory dashboard setting is no longer on the critical path; drift
 there cannot break production deploys.
+
+### Rotating RAILWAY_TOKEN
+
+If the token is compromised or expired:
+
+1. Generate a new project-scoped token in Railway → (your project) → Settings → Tokens.
+2. Update the GitHub secret: Settings → Secrets and variables → Actions → `RAILWAY_TOKEN` → Update.
+3. Revoke the old token in Railway → (your project) → Settings → Tokens.
+
+Deploys will fail with an auth error while the token is invalid; they resume automatically on the next push after the secret is updated.
 
 ## Diagnosing a failed deploy
 

@@ -6,6 +6,10 @@ on:
     types: [completed]
     branches: [main]
 
+concurrency:
+  group: railway-deploy
+  cancel-in-progress: false
+
 # Deploys to Railway only when every CI job (gates + docker-build) passes on main.
 # Uses `railway up` from the repo root so Railway sees the full build context
 # (including lib/) regardless of the dashboard "Root Directory" setting —
@@ -23,6 +27,7 @@ jobs:
   deploy:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -33,6 +38,7 @@ jobs:
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
+          set -euo pipefail
           missing=()
           if [ -z "${RAILWAY_TOKEN//[[:space:]]/}" ]; then missing+=("RAILWAY_TOKEN"); fi
           if [ ${#missing[@]} -gt 0 ]; then
@@ -45,16 +51,16 @@ jobs:
 
       - name: Install Railway CLI
         if: steps.secrets.outputs.skip != 'true'
-        run: npm install -g @railway/cli
+        run: npm install -g @railway/cli@4
 
       - name: Deploy web service
         if: steps.secrets.outputs.skip != 'true'
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-        run: railway up --service web --detach
+        run: railway up --service web
 
       - name: Deploy mcp service
         if: steps.secrets.outputs.skip != 'true'
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-        run: railway up --service mcp --detach
+        run: railway up --service mcp
