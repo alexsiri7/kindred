@@ -103,13 +103,15 @@ export function EntryDetail() {
           <button
             type="button"
             className={`transcript-toggle ${showTranscript ? 'is-open' : ''}`}
+            aria-expanded={showTranscript}
+            aria-controls="entry-transcript-body"
             onClick={() => setShowTranscript((v) => !v)}
           >
-            <span className="chev">▸</span>
+            <span className="chev" aria-hidden="true">▸</span>
             {showTranscript ? 'Hide' : 'Show'} full transcript ({transcriptCount} messages)
           </button>
           {showTranscript && (
-            <div className="transcript-body">
+            <div id="entry-transcript-body" className="transcript-body">
               {entry.transcript.map((m, i) => (
                 <div
                   key={i}
