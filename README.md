@@ -46,6 +46,8 @@ See [docs/setup.md](docs/setup.md) for client-specific setup (Claude Projects, C
 
 Both services deploy via Railway's GitHub integration. Before changing any `Dockerfile`, `railway.toml`, or the `lib/` layout, see [docs/runbook-railway.md](docs/runbook-railway.md) for the per-service Railway dashboard contract (Root Directory, Config-as-code Path, build args).
 
+CI runs a `docker-build` gate that builds both `mcp/Dockerfile` and `web/Dockerfile` at repo-root context on every PR, catching the most common deploy-drift regressions at PR time.
+
 ## Development
 
 ```bash
