@@ -93,13 +93,23 @@ describe('EntryDetail', () => {
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
     expect(toggle.getAttribute('aria-controls')).toBe('entry-transcript-body')
 
+    const body = document.querySelector('.transcript-body') as HTMLElement
+    expect(body).not.toBeNull()
+    expect(body.id).toBe('entry-transcript-body')
+    expect(body.hasAttribute('hidden')).toBe(true)
+
     fireEvent.click(toggle)
 
     expect(toggle.getAttribute('aria-expanded')).toBe('true')
-    const body = document.querySelector('.transcript-body')
-    expect(body).not.toBeNull()
-    expect(body!.id).toBe('entry-transcript-body')
+    expect(toggle.classList.contains('is-open')).toBe(true)
+    expect(body.hasAttribute('hidden')).toBe(false)
     expect(document.querySelector('.t-msg.kindred')).not.toBeNull()
+
+    fireEvent.click(toggle)
+
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(toggle.classList.contains('is-open')).toBe(false)
+    expect(body.hasAttribute('hidden')).toBe(true)
   })
 
   it('marks the chevron as decorative for screen readers', async () => {

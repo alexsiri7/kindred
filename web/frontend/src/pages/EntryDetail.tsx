@@ -110,19 +110,21 @@ export function EntryDetail() {
             <span className="chev" aria-hidden="true">▸</span>
             {showTranscript ? 'Hide' : 'Show'} full transcript ({transcriptCount} messages)
           </button>
-          {showTranscript && (
-            <div id="entry-transcript-body" className="transcript-body">
-              {entry.transcript.map((m, i) => (
-                <div
-                  key={i}
-                  className={`t-msg ${m.role === 'assistant' ? 'kindred' : 'user'}`}
-                >
-                  <span className="who">{m.role === 'assistant' ? 'kindred' : 'you'}</span>
-                  <span className="text">{m.content}</span>
-                </div>
-              ))}
-            </div>
-          )}
+          <div
+            id="entry-transcript-body"
+            className="transcript-body"
+            hidden={!showTranscript}
+          >
+            {entry.transcript.map((m, i) => (
+              <div
+                key={i}
+                className={`t-msg ${m.role === 'assistant' ? 'kindred' : 'user'}`}
+              >
+                <span className="who">{m.role === 'assistant' ? 'kindred' : 'you'}</span>
+                <span className="text">{m.content}</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </>

@@ -177,7 +177,12 @@ describe('EntryDetail transcript disclosure contract (#26)', () => {
   })
 
   it('.transcript-toggle .chev animates its transform', () => {
-    const match = css.match(/\.transcript-toggle \.chev\s*\{([^}]*)\}/)
+    // Pin the base rule (outside any reduced-motion override) — the selector
+    // is declared twice in this file (base + inside @media). The base rule
+    // appears in source order before the override block that contains it, so
+    // strip every reduced-motion block from the haystack before matching.
+    const baseCss = stripReducedMotionBlocks(css)
+    const match = baseCss.match(/\.transcript-toggle \.chev\s*\{([^}]*)\}/)
     expect(match).not.toBeNull()
     expect(match![1]).toContain('transition: transform')
   })
@@ -188,13 +193,45 @@ describe('EntryDetail transcript disclosure contract (#26)', () => {
     expect(match![1]).toContain('transform: rotate(90deg)')
   })
 
-  it('chevron rotation is disabled under prefers-reduced-motion', () => {
-    expect(css).toMatch(/@media\s*\(prefers-reduced-motion:\s*reduce\)/)
-    expect(css).toMatch(
-      /\.transcript-toggle\s+\.chev\s*\{[^}]*transition:\s*none[^}]*\}/,
+  it('chevron rotation is disabled INSIDE the prefers-reduced-motion block', () => {
+    // The file has multiple `prefers-reduced-motion: reduce` blocks (e.g. one
+    // for buttons, one for entry detail). Walk each and assert the chev
+    // override appears in *some* such block. A depth-aware brace walk handles
+    // the nested @keyframes inside the entry-detail block, which a flat
+    // `[^}]*` regex cannot bracket correctly.
+    const blocks = collectReducedMotionBlocks(css)
+    expect(blocks.length).toBeGreaterThan(0)
+
+    const containsChevOverride = blocks.some((block) =>
+      /\.transcript-toggle\s+\.chev\s*\{[^}]*transition:\s*none[^}]*\}/.test(block),
     )
+    expect(containsChevOverride).toBe(true)
   })
 })
+
+function collectReducedMotionBlocks(source: string): string[] {
+  const opener = /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{/g
+  const blocks: string[] = []
+  let m: RegExpExecArray | null
+  while ((m = opener.exec(source)) !== null) {
+    const bodyStart = m.index + m[0].length
+    let depth = 1
+    let i = bodyStart
+    for (; i < source.length && depth > 0; i++) {
+      if (source[i] === '{') depth++
+      else if (source[i] === '}') depth--
+    }
+    if (depth === 0) blocks.push(source.slice(bodyStart, i - 1))
+  }
+  return blocks
+}
+
+function stripReducedMotionBlocks(source: string): string {
+  const blocks = collectReducedMotionBlocks(source)
+  let out = source
+  for (const block of blocks) out = out.split(block).join('')
+  return out
+}
 
 describe('EntryDetail transcript message contract (#26)', () => {
   it('.t-msg .who is mono uppercase ink-3 fixed 60px column', () => {
