@@ -12,7 +12,7 @@ from mcp.server.fastmcp.exceptions import ToolError
 from auth import current_user_id
 
 
-async def _call(fn: Callable, *args: Any, **kwargs: Any) -> Any:
+async def _call[T](fn: Callable[..., T], *args: Any, **kwargs: Any) -> T:
     try:
         return await asyncio.to_thread(fn, *args, **kwargs)
     except Exception as exc:
