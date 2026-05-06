@@ -57,8 +57,7 @@ describe('Home', () => {
     expect(
       screen.getByRole('heading', { name: /your library/i }),
     ).toBeInTheDocument()
-    const em = document.querySelector('.page-title em')
-    expect(em?.textContent).toBe('Your')
+    expect(screen.getByText('Your', { selector: 'em' })).toBeInTheDocument()
   })
 
   it('renders the date column as "{monthShort} · {weekday}"', async () => {
@@ -79,14 +78,38 @@ describe('Home', () => {
     )
     await waitFor(() => {
       const matches = screen.getAllByText(/quiet morning/i)
-      expect(matches.length).toBeGreaterThan(0)
+      expect(matches.length).toBeGreaterThanOrEqual(2)
     })
     const dateCell = document.querySelector('.entry-date')
     expect(dateCell?.querySelector('.day')?.textContent).toBe('4')
     expect(dateCell?.textContent).toMatch(/Apr · Sat/)
   })
 
-  it('renders the read-only banner above the entries list', async () => {
+  it('renders the date column for a December entry', async () => {
+    useNavCounts.setState({ entryCount: null })
+    vi.mocked(api.get).mockResolvedValueOnce([
+      {
+        id: 'e2',
+        date: '2026-12-31',
+        summary: 'year end',
+        mood: null,
+        created_at: '2026-12-31T12:00:00Z',
+      },
+    ])
+    render(
+      <MemoryRouter>
+        <Home />
+      </MemoryRouter>,
+    )
+    await waitFor(() => {
+      expect(screen.getAllByText(/year end/i).length).toBeGreaterThanOrEqual(2)
+    })
+    const dateCell = document.querySelector('.entry-date')
+    expect(dateCell?.querySelector('.day')?.textContent).toBe('31')
+    expect(dateCell?.textContent).toMatch(/Dec · Thu/)
+  })
+
+  it('renders the read-only banner', async () => {
     useNavCounts.setState({ entryCount: null })
     vi.mocked(api.get).mockResolvedValueOnce([])
     render(
