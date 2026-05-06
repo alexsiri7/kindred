@@ -54,6 +54,35 @@ dashboard's `Root Directory` and `Config-as-code Path` are still
 implicit and not exercised by CI — drift in those settings will
 still only fail at the next prod deploy.
 
+## CI-driven deploy (recommended)
+
+`.github/workflows/deploy.yml` runs `railway up` from the repo root after every
+CI pass on `main`. Because `railway up` uploads files directly rather than
+triggering Railway's GitHub integration, the dashboard **Root Directory** setting
+is irrelevant — Railway always receives the full repo context including `lib/`.
+
+### One-time operator setup
+
+1. **GitHub secret**: `RAILWAY_TOKEN` — generate a Railway token in Railway →
+   Account → Tokens, then add it in GitHub Settings → Secrets and variables →
+   Actions. The workflow skips silently when the secret is absent.
+
+2. **Railway dashboard → `web` service → Settings → Source**:
+   - Set **Config-as-code Path**: `web/railway.toml`
+     (so `railway up --service web` picks `web/Dockerfile`, not the root MCP config)
+
+3. **Railway dashboard → both services → Settings → Source**:
+   - Disable **Deploy on push** (Railway's GitHub auto-deploy) to prevent
+     double-deploys after this workflow is active.
+
+`VITE_*` build variables stay in Railway — no changes needed there.
+
+### After setup
+
+Every merge to `main` that passes CI triggers one CI-managed deploy per service.
+The Root Directory dashboard setting is no longer on the critical path; drift
+there cannot break production deploys.
+
 ## Diagnosing a failed deploy
 
 If a Railway deploy fails within ~60s of starting, suspect a
