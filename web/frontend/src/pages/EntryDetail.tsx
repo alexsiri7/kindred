@@ -27,8 +27,6 @@ export function EntryDetail() {
     year: 'numeric',
   })
 
-  const transcriptCount = entry.transcript?.length ?? 0
-
   return (
     <>
       <button className="back-link" type="button" onClick={() => void navigate(-1)}>
@@ -103,24 +101,28 @@ export function EntryDetail() {
           <button
             type="button"
             className={`transcript-toggle ${showTranscript ? 'is-open' : ''}`}
+            aria-expanded={showTranscript}
+            aria-controls="entry-transcript-body"
             onClick={() => setShowTranscript((v) => !v)}
           >
-            <span className="chev">▸</span>
-            {showTranscript ? 'Hide' : 'Show'} full transcript ({transcriptCount} messages)
+            <span className="chev" aria-hidden="true">▸</span>
+            {showTranscript ? 'Hide' : 'Show'} full transcript ({entry.transcript.length} messages)
           </button>
-          {showTranscript && (
-            <div className="transcript-body">
-              {entry.transcript.map((m, i) => (
-                <div
-                  key={i}
-                  className={`t-msg ${m.role === 'assistant' ? 'kindred' : 'user'}`}
-                >
-                  <span className="who">{m.role === 'assistant' ? 'kindred' : 'you'}</span>
-                  <span className="text">{m.content}</span>
-                </div>
-              ))}
-            </div>
-          )}
+          <div
+            id="entry-transcript-body"
+            className="transcript-body"
+            hidden={!showTranscript}
+          >
+            {entry.transcript.map((m, i) => (
+              <div
+                key={i}
+                className={`t-msg ${m.role === 'assistant' ? 'kindred' : 'user'}`}
+              >
+                <span className="who">{m.role === 'assistant' ? 'kindred' : 'you'}</span>
+                <span className="text">{m.content}</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </>

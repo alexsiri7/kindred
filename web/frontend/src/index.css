@@ -889,6 +889,7 @@ section.hero { font-family: var(--font-body); font-size: var(--fs-md); letter-sp
   .entry-peek-1, .entry-peek-2 { transform: none; }
   .step { transition: none; }
   .step:hover { transform: none; }
+  .transcript-toggle .chev { transition: none; }
   .msg, .tool-call {
     animation-name: msgInFade;
     transform: none;
