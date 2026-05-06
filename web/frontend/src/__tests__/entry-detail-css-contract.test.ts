@@ -229,7 +229,7 @@ function collectReducedMotionBlocks(source: string): string[] {
 function stripReducedMotionBlocks(source: string): string {
   const blocks = collectReducedMotionBlocks(source)
   let out = source
-  for (const block of blocks) out = out.split(block).join('')
+  for (const block of blocks) out = out.replaceAll(block, '')
   return out
 }
 

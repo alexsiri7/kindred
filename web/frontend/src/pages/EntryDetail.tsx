@@ -27,8 +27,6 @@ export function EntryDetail() {
     year: 'numeric',
   })
 
-  const transcriptCount = entry.transcript?.length ?? 0
-
   return (
     <>
       <button className="back-link" type="button" onClick={() => void navigate(-1)}>
@@ -108,7 +106,7 @@ export function EntryDetail() {
             onClick={() => setShowTranscript((v) => !v)}
           >
             <span className="chev" aria-hidden="true">▸</span>
-            {showTranscript ? 'Hide' : 'Show'} full transcript ({transcriptCount} messages)
+            {showTranscript ? 'Hide' : 'Show'} full transcript ({entry.transcript.length} messages)
           </button>
           <div
             id="entry-transcript-body"
