@@ -1,0 +1,66 @@
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+concurrency:
+  group: railway-deploy
+  cancel-in-progress: false
+
+# Deploys to Railway only when every CI job (gates + docker-build) passes on main.
+# Uses `railway up` from the repo root so Railway sees the full build context
+# (including lib/) regardless of the dashboard "Root Directory" setting —
+# eliminating the recurring Root Directory drift failure mode.
+#
+# Required one-time operator setup (see docs/runbook-railway.md § CI-driven deploy):
+#   1. RAILWAY_TOKEN — GitHub Settings → Secrets and variables → Actions
+#   2. Railway dashboard → web service → Settings → Source:
+#        Config-as-code Path = web/railway.toml  (so Railway picks the right Dockerfile)
+#   3. Railway dashboard → both services → Settings → Source:
+#        Disable "Deploy on push" to avoid double-deploys from Railway's GitHub integration.
+#   VITE_* build variables stay in Railway — no changes needed there.
+
+jobs:
+  deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Check required secrets
+        id: secrets
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          set -euo pipefail
+          missing=()
+          if [ -z "${RAILWAY_TOKEN//[[:space:]]/}" ]; then missing+=("RAILWAY_TOKEN"); fi
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::warning::Skipping Railway deploy — required secrets not configured: ${missing[*]}."
+            echo "::warning::Add them in Settings → Secrets and variables → Actions (see docs/runbook-railway.md)."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install Railway CLI
+        if: steps.secrets.outputs.skip != 'true'
+        run: npm install -g @railway/cli@4
+
+      - name: Deploy web service
+        if: steps.secrets.outputs.skip != 'true'
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: railway up --service web
+
+      - name: Deploy mcp service
+        if: steps.secrets.outputs.skip != 'true'
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: railway up --service mcp

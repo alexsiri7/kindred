@@ -44,9 +44,11 @@ See [docs/setup.md](docs/setup.md) for client-specific setup (Claude Projects, C
 
 ## Deployment
 
-Both services deploy via Railway's GitHub integration. Before changing any `Dockerfile`, `railway.toml`, or the `lib/` layout, see [docs/runbook-railway.md](docs/runbook-railway.md) for the per-service Railway dashboard contract (Root Directory, Config-as-code Path, build args).
+Both services deploy to Railway via CI: every merge to `main` that passes all CI checks triggers `.github/workflows/deploy.yml`, which runs `railway up` from the repo root. Deploying from the repo root means the Railway dashboard **Root Directory** setting is irrelevant — `lib/` is always reachable.
 
-CI runs a `docker-build` gate that builds both `mcp/Dockerfile` and `web/Dockerfile` at repo-root context on every PR, catching the most common deploy-drift regressions at PR time.
+Before changing any `Dockerfile`, `railway.toml`, or the `lib/` layout, see [docs/runbook-railway.md](docs/runbook-railway.md) for the per-service Railway dashboard contract and CI-driven deploy setup steps.
+
+CI also runs a `docker-build` gate that builds both `mcp/Dockerfile` and `web/Dockerfile` at repo-root context on every PR, catching build-context mismatches before they reach prod.
 
 ## Development
 
@@ -56,9 +58,10 @@ CI runs a `docker-build` gate that builds both `mcp/Dockerfile` and `web/Dockerf
 
 ## GitHub Actions secrets
 
-Two secrets must be added in the repo's **Settings → Secrets and variables → Actions** for the migration workflow to run on every push to `main`:
+Three secrets must be added in the repo's **Settings → Secrets and variables → Actions**:
 
-| Secret | Description |
-|---|---|
-| `SUPABASE_ACCESS_TOKEN` | Supabase personal access token (create at https://supabase.com/dashboard/account/tokens) |
-| `SUPABASE_DB_PASSWORD` | Production database password for your Supabase project |
+| Secret | Workflow | Description |
+|---|---|---|
+| `SUPABASE_ACCESS_TOKEN` | migrate.yml | Supabase personal access token (create at https://supabase.com/dashboard/account/tokens) |
+| `SUPABASE_DB_PASSWORD` | migrate.yml | Production database password for your Supabase project |
+| `RAILWAY_TOKEN` | deploy.yml | Railway API token — generate in Railway → (your project) → Settings → Tokens. Without this secret, the deploy workflow skips silently. |
