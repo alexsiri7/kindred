@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from lib.services import entries as entries_service
 from mcp.server.fastmcp.exceptions import ToolError
@@ -39,7 +40,9 @@ async def get_entry(
     id: str | None = None,
 ) -> dict[str, Any]:
     user_id = current_user_id.get()
-    return await _call(entries_service.get_entry_by_date_or_id, user_id, None, date=date, entry_id=id)
+    return await _call(
+        entries_service.get_entry_by_date_or_id, user_id, None, date=date, entry_id=id
+    )
 
 
 async def list_recent_entries(limit: int = 10) -> list[dict[str, Any]]:

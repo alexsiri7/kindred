@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from lib.services import patterns as patterns_service
 from mcp.server.fastmcp.exceptions import ToolError
