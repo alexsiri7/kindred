@@ -100,3 +100,25 @@ def test_get_pattern_raises_when_missing(monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setattr(db, "get_pattern", lambda *a, **k: None)
     with pytest.raises(LookupError):
         patterns_service.get_pattern(USER_ID, None, "missing")
+
+
+def test_get_pattern_with_occurrences_returns_pattern_and_occurrences(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(db, "get_pattern", lambda u, j, pid: {"id": pid, "name": "test"})
+    monkeypatch.setattr(
+        db,
+        "list_occurrences",
+        lambda u, j, pid, since: [{"id": OCCURRENCE_ID}],
+    )
+    result = patterns_service.get_pattern_with_occurrences(USER_ID, None, PATTERN_ID)
+    assert result["id"] == PATTERN_ID
+    assert result["occurrences"] == [{"id": OCCURRENCE_ID}]
+
+
+def test_get_pattern_with_occurrences_raises_when_pattern_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(db, "get_pattern", lambda *a, **k: None)
+    with pytest.raises(LookupError):
+        patterns_service.get_pattern_with_occurrences(USER_ID, None, PATTERN_ID)
