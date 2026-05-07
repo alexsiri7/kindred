@@ -43,7 +43,7 @@ jobs:
           if [ -z "${RAILWAY_TOKEN//[[:space:]]/}" ]; then missing+=("RAILWAY_TOKEN"); fi
           if [ ${#missing[@]} -gt 0 ]; then
             echo "::error::Railway deploy blocked — required secrets not configured: ${missing[*]}."
-            echo "::error::Add RAILWAY_TOKEN in GitHub Settings → Secrets and variables → Actions."
+            echo "::error::Add ${missing[*]} in GitHub Settings → Secrets and variables → Actions."
             echo "::error::See docs/runbook-railway.md for one-time operator setup instructions."
             exit 1
           fi
