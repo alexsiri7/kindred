@@ -2,21 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
-from collections.abc import Callable
 from typing import Any
 
 from lib.services import patterns as patterns_service
-from mcp.server.fastmcp.exceptions import ToolError
 
 from auth import current_user_id
-
-
-async def _call[T](fn: Callable[..., T], *args: Any, **kwargs: Any) -> T:
-    try:
-        return await asyncio.to_thread(fn, *args, **kwargs)
-    except Exception as exc:
-        raise ToolError(str(exc)) from exc
+from tools import _call
 
 
 async def list_patterns(active_since: str | None = None) -> list[dict[str, Any]]:

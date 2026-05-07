@@ -27,9 +27,7 @@ def get_pattern_with_occurrences(
     user_id: str, jwt_token: str | None, pattern_id: str
 ) -> dict[str, Any]:
     """Pattern + its occurrences (web GET /patterns/:id shape)."""
-    row = db.get_pattern(user_id, jwt_token, pattern_id)
-    if row is None:
-        raise LookupError(f"pattern not found: {pattern_id}")
+    row = get_pattern(user_id, jwt_token, pattern_id)
     row["occurrences"] = db.list_occurrences(user_id, jwt_token, pattern_id, since=None)
     return row
 
