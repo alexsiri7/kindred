@@ -74,6 +74,9 @@ is irrelevant — Railway always receives the full repo context including `lib/`
    Secrets and variables → Actions. Until the secret is set, the Deploy
    workflow fails with a hard error on every main push (by design).
 
+   > **Complete this step promptly.** CI will hard-fail on every `main` push
+   > until `RAILWAY_TOKEN` is present — that is intentional, not a bug.
+
 3. **Railway dashboard → `web` service → Settings → Source**:
    - Set **Config-as-code Path**: `web/railway.toml`
      (so `railway up --service web` picks `web/Dockerfile`, not the root MCP config)
