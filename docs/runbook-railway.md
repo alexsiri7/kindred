@@ -71,8 +71,11 @@ is irrelevant — Railway always receives the full repo context including `lib/`
 2. **GitHub secret**: `RAILWAY_TOKEN` — generate a project-scoped token in
    Railway → (your project) → Settings → Tokens (not Account → Tokens, to
    limit blast radius to this project), then add it in GitHub Settings →
-   Secrets and variables → Actions. The workflow skips silently when the
-   secret is absent.
+   Secrets and variables → Actions. Until the secret is set, the Deploy
+   workflow fails with a hard error on every main push (by design).
+
+   > **Complete this step promptly.** CI will hard-fail on every `main` push
+   > until `RAILWAY_TOKEN` is present — that is intentional, not a bug.
 
 3. **Railway dashboard → `web` service → Settings → Source**:
    - Set **Config-as-code Path**: `web/railway.toml`
