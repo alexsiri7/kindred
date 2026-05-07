@@ -268,7 +268,7 @@ def update_pattern_seen(
     pattern_id: str,
     last_seen_at: str | None = None,
 ) -> None:
-    last_seen = last_seen_at or datetime.utcnow().isoformat()
+    last_seen = last_seen_at or datetime.now(UTC).isoformat()
     # Read-then-write because PostgREST doesn't support raw SQL increments.
     res = (
         _table(user_id, jwt_token, "patterns")
