@@ -104,9 +104,12 @@ Deploys will fail with an auth error while the token is invalid; they resume aut
 ## Current status
 
 **Pending operator setup**: The `RAILWAY_TOKEN` GitHub Actions secret has **not been set**.
-Production deploys are **skipped (with notice in the Actions log)** on every `main` push
-until the one-time operator setup (§ One-time operator setup) is completed. CI remains
-green; no code is being deployed to Railway.
+Production deploys are **skipped (with notice in the Actions log)** on every `main` push.
+The Deploy workflow marks each GitHub Deployment as `inactive` (skipped) or `success`
+(deployed) so the pipeline health monitor does not raise false alerts.
+
+No code is being deployed to Railway until the one-time operator setup
+(§ One-time operator setup) is completed.
 
 Follow the setup steps above to enable production deployments.
 

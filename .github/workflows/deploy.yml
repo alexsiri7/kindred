@@ -10,6 +10,10 @@ concurrency:
   group: railway-deploy
   cancel-in-progress: false
 
+permissions:
+  contents: read
+  deployments: write
+
 # Deploys to Railway only when every CI job (gates + docker-build) passes on main.
 # Uses `railway up` from the repo root so Railway sees the full build context
 # (including lib/) regardless of the dashboard "Root Directory" setting —
@@ -65,3 +69,30 @@ jobs:
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: railway up --service mcp
+
+      - name: Report deployment status
+        uses: actions/github-script@v7
+        env:
+          SKIP: ${{ steps.secrets.outputs.skip }}
+        with:
+          script: |
+            const sha = context.payload.workflow_run.head_sha;
+            const { data: deployments } = await github.rest.repos.listDeployments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha,
+              per_page: 5,
+            });
+            const state = process.env.SKIP === 'true' ? 'inactive' : 'success';
+            const description = process.env.SKIP === 'true'
+              ? 'Deploy skipped — RAILWAY_TOKEN not configured'
+              : 'Deployed via CI';
+            for (const dep of deployments) {
+              await github.rest.repos.createDeploymentStatus({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                deployment_id: dep.id,
+                state,
+                description,
+              });
+            }
