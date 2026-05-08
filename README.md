@@ -64,4 +64,4 @@ Three secrets must be added in the repo's **Settings → Secrets and variables �
 |---|---|---|
 | `SUPABASE_ACCESS_TOKEN` | migrate.yml | Supabase personal access token (create at https://supabase.com/dashboard/account/tokens) |
 | `SUPABASE_DB_PASSWORD` | migrate.yml | Production database password for your Supabase project |
-| `RAILWAY_TOKEN` | deploy.yml | Railway API token — generate in Railway → (your project) → Settings → Tokens. Without this secret, the deploy workflow skips silently. |
+| `RAILWAY_TOKEN` | deploy.yml | Railway API token — generate in Railway → (your project) → Settings → Tokens. Without this secret, the deploy workflow skips with a notice in the Actions log and marks each GitHub Deployment as `inactive` so the pipeline health monitor does not raise false alerts. |

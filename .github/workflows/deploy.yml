@@ -77,11 +77,14 @@ jobs:
         with:
           script: |
             const sha = context.payload.workflow_run.head_sha;
+            // No environment filter: intentionally updates all environments for this SHA
+            // so the pipeline-health cron doesn't alert on any stale Railway deployment.
+            // Revisit if preview/staging deployments are added.
             const { data: deployments } = await github.rest.repos.listDeployments({
               owner: context.repo.owner,
               repo: context.repo.repo,
               sha,
-              per_page: 5,
+              per_page: 10, // 2 Railway services; 10 gives comfortable headroom
             });
             const state = process.env.SKIP === 'true' ? 'inactive' : 'success';
             const description = process.env.SKIP === 'true'
