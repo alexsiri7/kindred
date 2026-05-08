@@ -36,7 +36,7 @@ export function Patterns() {
       .then((arr) => {
         if (stale) return
         setPatterns(arr)
-        useNavCounts.getState().setPatternCount(arr.length)
+        useNavCounts.setState({ patternCount: arr.length })
       })
       .catch((e: Error) => {
         if (!stale) setError(e.message)

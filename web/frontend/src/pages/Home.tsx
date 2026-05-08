@@ -38,7 +38,7 @@ export function Home() {
       .then((arr) => {
         if (stale) return
         setEntries(arr)
-        useNavCounts.getState().setEntryCount(arr.length)
+        useNavCounts.setState({ entryCount: arr.length })
       })
       .catch((e: Error) => {
         if (!stale) setError(e.message)
