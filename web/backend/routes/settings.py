@@ -26,18 +26,19 @@ class SettingsPatch(BaseModel):
     crisis_disclaimer_acknowledged_at: str | None = None
 
 
+def _settings_response(meta: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "timezone": meta.get("timezone"),
+        "transcript_enabled": meta.get("transcript_enabled", True),
+        "crisis_disclaimer_acknowledged_at": meta.get("crisis_disclaimer_acknowledged_at"),
+    }
+
+
 @router.get("/settings")
 def get_settings(
     user: dict[str, Any] = Depends(get_current_user),
 ) -> dict[str, Any]:
-    meta = cast(dict[str, Any], user.get("user_metadata") or {})
-    return {
-        "timezone": meta.get("timezone"),
-        "transcript_enabled": meta.get("transcript_enabled", True),
-        "crisis_disclaimer_acknowledged_at": meta.get(
-            "crisis_disclaimer_acknowledged_at"
-        ),
-    }
+    return _settings_response(cast(dict[str, Any], user.get("user_metadata") or {}))
 
 
 @router.patch("/settings")
@@ -48,13 +49,7 @@ async def update_settings(
     current = dict(cast(dict[str, Any], user.get("user_metadata") or {}))
     current.update(patch.model_dump(exclude_none=True))
     merged = await db.update_user_metadata(user["jwt"], current)
-    return {
-        "timezone": merged.get("timezone"),
-        "transcript_enabled": merged.get("transcript_enabled", True),
-        "crisis_disclaimer_acknowledged_at": merged.get(
-            "crisis_disclaimer_acknowledged_at"
-        ),
-    }
+    return _settings_response(merged)
 
 
 @router.get("/export")

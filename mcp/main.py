@@ -190,9 +190,7 @@ def with_user_context(app: ASGIApp) -> ASGIApp:
             return
         headers = {k.decode().lower(): v.decode() for k, v in scope.get("headers", [])}
         auth = headers.get("authorization", "")
-        token: str | None = None
-        if auth.lower().startswith("bearer "):
-            token = auth.split(" ", 1)[1].strip()
+        token = auth.split(" ", 1)[1].strip() if auth.lower().startswith("bearer ") else None
 
         user_id: str | None = None
         if token:

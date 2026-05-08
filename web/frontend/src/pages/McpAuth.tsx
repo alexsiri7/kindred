@@ -5,6 +5,25 @@ import { Button } from '../components/Button'
 
 const MCP_BASE = import.meta.env.VITE_MCP_BASE_URL ?? 'https://kindred-mcp.interstellarai.net'
 
+const wrapStyle: React.CSSProperties = {
+  minHeight: '100vh',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  background: 'var(--paper)',
+}
+
+const cardStyle: React.CSSProperties = {
+  width: '100%',
+  maxWidth: 380,
+  background: 'var(--bg-elevated)',
+  border: '1px solid var(--border)',
+  borderRadius: 'var(--r-xl)',
+  padding: 'var(--sp-7)',
+  boxShadow: 'var(--shadow-md)',
+  textAlign: 'center',
+}
+
 export function McpAuth() {
   const [status, setStatus] = useState<'starting' | 'completing' | 'done' | 'error'>('starting')
   const [errorMsg, setErrorMsg] = useState('')
@@ -79,25 +98,6 @@ export function McpAuth() {
 
     return () => subscription.unsubscribe()
   }, [])
-
-  const cardStyle: React.CSSProperties = {
-    width: '100%',
-    maxWidth: 380,
-    background: 'var(--bg-elevated)',
-    border: '1px solid var(--border)',
-    borderRadius: 'var(--r-xl)',
-    padding: 'var(--sp-7)',
-    boxShadow: 'var(--shadow-md)',
-    textAlign: 'center',
-  }
-
-  const wrapStyle: React.CSSProperties = {
-    minHeight: '100vh',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    background: 'var(--paper)',
-  }
 
   const brandRow = (
     <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 'var(--sp-5)' }}>
