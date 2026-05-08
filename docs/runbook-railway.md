@@ -112,6 +112,8 @@ fatal error: RAILWAY_TOKEN is not set
 
 Follow the setup steps above to unblock production deployments.
 
+> Once setup is complete, delete this section and open a PR to keep the runbook current.
+
 ## Diagnosing a failed deploy
 
 If a Railway deploy fails within ~60s of starting, suspect a
