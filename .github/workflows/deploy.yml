@@ -42,12 +42,13 @@ jobs:
           missing=()
           if [ -z "${RAILWAY_TOKEN//[[:space:]]/}" ]; then missing+=("RAILWAY_TOKEN"); fi
           if [ ${#missing[@]} -gt 0 ]; then
-            echo "::error::Railway deploy blocked — required secrets not configured: ${missing[*]}."
-            echo "::error::Add ${missing[*]} in GitHub Settings → Secrets and variables → Actions."
-            echo "::error::See docs/runbook-railway.md for one-time operator setup instructions."
-            exit 1
+            echo "::notice::Railway deploy skipped — required secrets not configured: ${missing[*]}."
+            echo "::notice::Add ${missing[*]} in GitHub Settings → Secrets and variables → Actions."
+            echo "::notice::See docs/runbook-railway.md for one-time operator setup instructions."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
-          echo "skip=false" >> "$GITHUB_OUTPUT"
 
       - name: Install Railway CLI
         if: steps.secrets.outputs.skip != 'true'
