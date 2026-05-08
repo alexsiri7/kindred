@@ -72,10 +72,12 @@ is irrelevant — Railway always receives the full repo context including `lib/`
    Railway → (your project) → Settings → Tokens (not Account → Tokens, to
    limit blast radius to this project), then add it in GitHub Settings →
    Secrets and variables → Actions. Until the secret is set, the Deploy
-   workflow fails with a hard error on every main push (by design).
+   workflow **skips silently on every `main` push** — CI stays green but
+   no code is deployed to Railway.
 
-   > **Complete this step promptly.** CI will hard-fail on every `main` push
-   > until `RAILWAY_TOKEN` is present — that is intentional, not a bug.
+   > **Complete this step to enable production deployments.** Every push to
+   > `main` is silently skipping the Railway deploy until `RAILWAY_TOKEN` is
+   > present. Nothing is broken, but nothing is shipping.
 
 3. **Railway dashboard → `web` service → Settings → Source**:
    - Set **Config-as-code Path**: `web/railway.toml`
@@ -102,9 +104,9 @@ Deploys will fail with an auth error while the token is invalid; they resume aut
 ## Current status
 
 **Pending operator setup**: The `RAILWAY_TOKEN` GitHub Actions secret has **not been set**.
-Production deploys are **silently skipped** on every `main` push until the one-time
-operator setup (§ One-time operator setup) is completed. CI remains green; no code
-is being deployed to Railway.
+Production deploys are **skipped (with notice in the Actions log)** on every `main` push
+until the one-time operator setup (§ One-time operator setup) is completed. CI remains
+green; no code is being deployed to Railway.
 
 Follow the setup steps above to enable production deployments.
 
