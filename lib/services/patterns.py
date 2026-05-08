@@ -28,7 +28,7 @@ def get_pattern_with_occurrences(
 ) -> dict[str, Any]:
     """Pattern + its occurrences (web GET /patterns/:id shape)."""
     row = get_pattern(user_id, jwt_token, pattern_id)
-    row["occurrences"] = db.list_occurrences(user_id, jwt_token, pattern_id)
+    row["occurrences"] = db.list_occurrences(user_id, jwt_token, pattern_id, None)
     return row
 
 
