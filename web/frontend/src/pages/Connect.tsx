@@ -92,6 +92,24 @@ const CLIENTS: ClientSetup[] = [
   },
 ]
 
+const CMD_ROW_STYLE = {
+  display: 'flex' as const,
+  gap: 8,
+  alignItems: 'center' as const,
+  marginTop: 'var(--sp-4)',
+  flexWrap: 'wrap' as const,
+}
+
+const CMD_CODE_STYLE = {
+  flex: 1,
+  minWidth: 0,
+  marginTop: 0,
+  padding: '12px 14px',
+  fontSize: 13,
+  color: 'var(--ink)',
+  wordBreak: 'break-all' as const,
+}
+
 export function Connect() {
   const [token, setToken] = useState<ConnectorToken | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -119,23 +137,6 @@ export function Connect() {
     : 'https://kindred-mcp.interstellarai.net/mcp'
 
   const client = CLIENTS.find((c) => c.key === activeClient) ?? CLIENTS[0]
-
-  const cmdRowStyle: React.CSSProperties = {
-    display: 'flex',
-    gap: 8,
-    alignItems: 'center',
-    marginTop: 'var(--sp-4)',
-    flexWrap: 'wrap',
-  }
-  const cmdCodeStyle: React.CSSProperties = {
-    flex: 1,
-    minWidth: 0,
-    marginTop: 0,
-    padding: '12px 14px',
-    fontSize: 13,
-    color: 'var(--ink)',
-    wordBreak: 'break-all',
-  }
 
   return (
     <>
@@ -166,8 +167,8 @@ export function Connect() {
             Add the <em>MCP URL</em>
           </h3>
           <p>This is the server your AI assistant will talk to.</p>
-          <div style={cmdRowStyle}>
-            <code className="step-cmd" style={cmdCodeStyle}>
+          <div style={CMD_ROW_STYLE}>
+            <code className="step-cmd" style={CMD_CODE_STYLE}>
               {MCP_URL}
             </code>
             <Button variant="secondary" onClick={() => void copy(MCP_URL)}>
@@ -203,11 +204,11 @@ export function Connect() {
             <strong>Treat this token like a password.</strong> Anyone who has it can read your
             journal. Don&apos;t paste it into chat, screenshots, or shared docs.
           </div>
-          <div style={cmdRowStyle}>
+          <div style={CMD_ROW_STYLE}>
             <code
               className="step-cmd"
               style={{
-                ...cmdCodeStyle,
+                ...CMD_CODE_STYLE,
                 color: token ? 'var(--ink)' : 'var(--ink-3)',
               }}
             >
@@ -325,10 +326,10 @@ export function Connect() {
             >
               {client.oneLinerHint}
             </p>
-            <div style={{ ...cmdRowStyle, marginTop: 0 }}>
+            <div style={{ ...CMD_ROW_STYLE, marginTop: 0 }}>
               <code
                 className="step-cmd"
-                style={{ ...cmdCodeStyle, wordBreak: 'break-word' }}
+                style={{ ...CMD_CODE_STYLE, wordBreak: 'break-word' }}
               >
                 {ONE_LINER}
               </code>

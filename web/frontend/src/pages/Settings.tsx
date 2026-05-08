@@ -10,6 +10,12 @@ import { Toggle } from '../components/Toggle'
 
 const ALL_TIMEZONES = Intl.supportedValuesOf('timeZone')
 
+const STATUS_LABEL = {
+  revoked: <span style={{ color: 'var(--rust)' }}>Revoked</span>,
+  expired: <span style={{ color: 'var(--ink-3)' }}>Expired</span>,
+  active: <span>Active</span>,
+}
+
 function TimezoneInput({
   value,
   onSave,
@@ -366,13 +372,7 @@ export function Settings() {
                   >
                     <div style={{ fontSize: 13 }}>
                       <div style={{ color: 'var(--ink)' }}>
-                        {status === 'revoked' && (
-                          <span style={{ color: 'var(--rust)' }}>Revoked</span>
-                        )}
-                        {status === 'expired' && (
-                          <span style={{ color: 'var(--ink-3)' }}>Expired</span>
-                        )}
-                        {status === 'active' && <span>Active</span>}
+                        {STATUS_LABEL[status]}
                         {' · created '}
                         {new Date(t.created_at).toLocaleDateString()}
                       </div>
