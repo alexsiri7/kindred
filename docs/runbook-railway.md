@@ -99,6 +99,19 @@ If the token is compromised or expired:
 
 Deploys will fail with an auth error while the token is invalid; they resume automatically on the next push after the secret is updated.
 
+## Current status (issue #105)
+
+**BLOCKING**: The `RAILWAY_TOKEN` GitHub Actions secret has **not been set**. The
+Deploy workflow will hard-fail on every `main` push with "Check required secrets"
+until the one-time operator setup (§ One-time operator setup) is completed.
+
+If you see this in the deploy logs:
+```
+fatal error: RAILWAY_TOKEN is not set
+```
+
+Follow the setup steps above to unblock production deployments.
+
 ## Diagnosing a failed deploy
 
 If a Railway deploy fails within ~60s of starting, suspect a
