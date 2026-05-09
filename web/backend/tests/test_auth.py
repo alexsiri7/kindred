@@ -5,11 +5,11 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
+import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import ec
 from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
-import jwt
 
 from auth import get_current_user
 
