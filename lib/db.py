@@ -151,8 +151,20 @@ def list_recent_entries(
 
 
 def delete_entry(user_id: str, jwt_token: str | None, entry_id: str) -> None:
-    _table(user_id, jwt_token, "entry_embeddings").delete().eq("user_id", user_id).eq("entry_id", entry_id).execute()
-    _table(user_id, jwt_token, "entries").delete().eq("user_id", user_id).eq("id", entry_id).execute()
+    (
+        _table(user_id, jwt_token, "entry_embeddings")
+        .delete()
+        .eq("user_id", user_id)
+        .eq("entry_id", entry_id)
+        .execute()
+    )
+    (
+        _table(user_id, jwt_token, "entries")
+        .delete()
+        .eq("user_id", user_id)
+        .eq("id", entry_id)
+        .execute()
+    )
 
 
 # ---------------------------------------------------------------------------
