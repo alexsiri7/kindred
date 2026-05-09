@@ -3,12 +3,23 @@ from __future__ import annotations
 from typing import Any
 
 import jwt
+from jwt import PyJWKClient
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from settings import settings
 
 _bearer = HTTPBearer(auto_error=False)
+
+_jwks_client: PyJWKClient | None = None
+
+def _get_jwks_client() -> PyJWKClient:
+    global _jwks_client
+    if _jwks_client is None:
+        _jwks_client = PyJWKClient(
+            f"{settings.supabase_url.rstrip('/')}/auth/v1/.well-known/jwks.json"
+        )
+    return _jwks_client
 
 
 async def get_current_user(
@@ -19,13 +30,14 @@ async def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Bearer token required"
         )
     try:
+        signing_key = _get_jwks_client().get_signing_key_from_jwt(cred.credentials)
         payload = jwt.decode(
             cred.credentials,
-            settings.supabase_jwt_secret,
-            algorithms=["HS256"],
+            signing_key,
+            algorithms=["ES256"],
             audience="authenticated",
         )
-    except jwt.PyJWTError as exc:
+    except (jwt.PyJWTError, Exception) as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
         ) from exc
