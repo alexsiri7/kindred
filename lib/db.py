@@ -51,19 +51,19 @@ def _supabase_user_jwt(user_id: str) -> str:
     )
 
 
+@lru_cache(maxsize=1)
+def _base_client() -> Client:
+    return create_client(settings.supabase_url, settings.supabase_anon_key)
+
+
 def user_client(user_id: str, jwt_token: str | None = None) -> Client:
     """Anon-key client with a user JWT attached.
 
-    If ``jwt_token`` is provided (web flow), it's attached as-is — the
-    caller has already verified it via Supabase ``/auth/v1/user``. If
+    If ``jwt_token`` is provided (web flow), it's attached as-is. If
     ``jwt_token`` is None (MCP flow), we mint one for ``user_id`` from
     ``SUPABASE_JWT_SECRET``. Either way RLS scopes every query.
-
-    Constructed per call — never cached, because caching across users
-    would re-introduce the cross-user leak the architecture is designed
-    to prevent.
     """
-    client = create_client(settings.supabase_url, settings.supabase_anon_key)
+    client = _base_client()
     token = jwt_token if jwt_token is not None else _supabase_user_jwt(user_id)
     client.postgrest.auth(token)
     return client

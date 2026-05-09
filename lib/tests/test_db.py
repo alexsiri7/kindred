@@ -68,8 +68,10 @@ def test_user_client_attaches_jwt_via_postgrest_auth(
     def _fake_create_client(_url: str, _key: str) -> Any:
         return fake_client
 
+    db._base_client.cache_clear()
     monkeypatch.setattr(db, "create_client", _fake_create_client)
     db.user_client(USER_ID, None)
+    db._base_client.cache_clear()
     fake_client.postgrest.auth.assert_called_once()
     (jwt_arg,), _ = fake_client.postgrest.auth.call_args
     payload = jwt.decode(jwt_arg, JWT_SECRET, algorithms=["HS256"], audience="authenticated")
@@ -85,6 +87,8 @@ def test_user_client_passes_through_provided_jwt(
     def _fake_create_client(_url: str, _key: str) -> Any:
         return fake_client
 
+    db._base_client.cache_clear()
     monkeypatch.setattr(db, "create_client", _fake_create_client)
     db.user_client(USER_ID, "caller-supplied-jwt")
+    db._base_client.cache_clear()
     fake_client.postgrest.auth.assert_called_once_with("caller-supplied-jwt")
