@@ -78,3 +78,9 @@ def search_entries(
         raise ValueError("query must not be empty")
     vector = embeddings.embed(query)
     return db.match_entries(user_id, jwt_token, vector, limit)
+
+
+def delete_entry(user_id: str, jwt_token: str | None, entry_id: str) -> None:
+    if db.get_entry_by_id(user_id, jwt_token, entry_id) is None:
+        raise LookupError("entry not found")
+    db.delete_entry(user_id, jwt_token, entry_id)

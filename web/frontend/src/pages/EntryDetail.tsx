@@ -8,6 +8,22 @@ export function EntryDetail() {
   const [entry, setEntry] = useState<Entry | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [showTranscript, setShowTranscript] = useState(false)
+  const [deleteState, setDeleteState] = useState<'idle' | 'confirm' | 'deleting'>('idle')
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+
+  async function handleDelete() {
+    if (deleteState === 'idle') { setDeleteState('confirm'); return }
+    if (deleteState === 'confirm') {
+      setDeleteState('deleting')
+      try {
+        await api.delete(`/entries/${id}`)
+        void navigate('/app')
+      } catch (e) {
+        setDeleteError((e as Error).message)
+        setDeleteState('idle')
+      }
+    }
+  }
 
   useEffect(() => {
     if (!id) return
@@ -43,6 +59,28 @@ export function EntryDetail() {
         <div className="entry-detail-meta">
           {entry.mood && <span className="mood-big">◉ {entry.mood}</span>}
           {entry.transcript ? 'transcript on' : 'summary only'}
+        </div>
+        <div className="entry-detail-delete">
+          <button
+            type="button"
+            className="btn btn-danger btn-sm"
+            onClick={() => void handleDelete()}
+            disabled={deleteState === 'deleting'}
+          >
+            {deleteState === 'idle' && 'Delete entry'}
+            {deleteState === 'confirm' && 'Yes, delete'}
+            {deleteState === 'deleting' && 'Deleting…'}
+          </button>
+          {deleteState === 'confirm' && (
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={() => setDeleteState('idle')}
+            >
+              Cancel
+            </button>
+          )}
+          {deleteError && <span style={{ color: 'var(--rust)' }}>{deleteError}</span>}
         </div>
       </div>
 

@@ -3,7 +3,7 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { MemoryRouter, Routes, Route } from 'react-router'
 
 vi.mock('../../api/client', () => ({
-  api: { get: vi.fn() },
+  api: { get: vi.fn(), delete: vi.fn() },
 }))
 
 import { EntryDetail } from '../EntryDetail'
@@ -128,5 +128,34 @@ describe('EntryDetail', () => {
     renderDetail()
     await waitFor(() => expect(document.querySelector('.back-link')).not.toBeNull())
     expect(screen.getByRole('button', { name: /all entries/i })).toBeInTheDocument()
+  })
+
+  it('clicking "Delete entry" once shows confirm state', async () => {
+    vi.mocked(api.get).mockResolvedValueOnce(sampleEntry)
+    renderDetail()
+    await waitFor(() => screen.getByRole('button', { name: 'Delete entry' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete entry' }))
+    expect(screen.getByRole('button', { name: 'Yes, delete' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument()
+  })
+
+  it('cancel returns to idle state', async () => {
+    vi.mocked(api.get).mockResolvedValueOnce(sampleEntry)
+    renderDetail()
+    await waitFor(() => screen.getByRole('button', { name: 'Delete entry' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete entry' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.getByRole('button', { name: 'Delete entry' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull()
+  })
+
+  it('confirming calls api.delete and navigates to /app', async () => {
+    vi.mocked(api.get).mockResolvedValueOnce(sampleEntry)
+    vi.mocked(api.delete).mockResolvedValueOnce(undefined)
+    renderDetail()
+    await waitFor(() => screen.getByRole('button', { name: 'Delete entry' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete entry' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, delete' }))
+    await waitFor(() => expect(vi.mocked(api.delete)).toHaveBeenCalledWith('/entries/e1'))
   })
 })

@@ -1,4 +1,4 @@
-"""GET /entries, GET /entries/:id — read-only."""
+"""GET /entries, GET /entries/:id, DELETE /entries/:id."""
 
 from __future__ import annotations
 
@@ -31,6 +31,19 @@ def get_entry(
         return entries_service.get_entry_with_occurrences(
             user["user_id"], user["jwt"], entry_id
         )
+    except LookupError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="entry not found"
+        ) from None
+
+
+@router.delete("/{entry_id}", status_code=204)
+def delete_entry(
+    entry_id: str,
+    user: dict[str, Any] = Depends(get_current_user),
+) -> None:
+    try:
+        entries_service.delete_entry(user["user_id"], user["jwt"], entry_id)
     except LookupError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="entry not found"
