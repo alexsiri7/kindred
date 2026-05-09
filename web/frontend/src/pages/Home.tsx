@@ -117,13 +117,11 @@ export function Home() {
               </div>
             )}
 
-            {entries.length === 0 && !selectedDate && (
+            {entries.length === 0 ? (
               <p style={{ color: 'var(--ink-3)' }}>
                 No entries yet. Start a journaling session in your AI assistant.
               </p>
-            )}
-
-            {selectedDate && filtered.length === 0 ? (
+            ) : selectedDate && filtered.length === 0 ? (
               <div className="empty-day">
                 <div className="empty-day-mark">— no entry —</div>
                 <p>

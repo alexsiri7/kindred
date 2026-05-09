@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 
 vi.mock('../../api/client', () => ({
@@ -76,6 +76,8 @@ describe('Home', () => {
         <Home />
       </MemoryRouter>,
     )
+    await waitFor(() => screen.getByText(/show all entries/i))
+    fireEvent.click(screen.getByText(/show all entries/i))
     await waitFor(() => {
       const matches = screen.getAllByText(/quiet morning/i)
       expect(matches.length).toBeGreaterThanOrEqual(2)
@@ -101,6 +103,8 @@ describe('Home', () => {
         <Home />
       </MemoryRouter>,
     )
+    await waitFor(() => screen.getByText(/show all entries/i))
+    fireEvent.click(screen.getByText(/show all entries/i))
     await waitFor(() => {
       expect(screen.getAllByText(/year end/i).length).toBeGreaterThanOrEqual(2)
     })
