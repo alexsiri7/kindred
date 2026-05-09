@@ -65,8 +65,8 @@ GUIDE_NUDGE = " If you have not already, read the kindred://guide resource for u
 mcp.tool(
     description=(
         "Call at the end of a session. Always confirm the summary with the user "
-        "before saving. Ask for a single mood word only if the user has offered it "
-        "naturally."
+        "before saving. Ask the user for a single mood word and the full conversation "
+        "transcript before calling."
         + GUIDE_NUDGE
     ),
 )(audited("save_entry")(entry_tools.save_entry))

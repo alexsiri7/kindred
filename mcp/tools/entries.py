@@ -13,8 +13,8 @@ from tools import _call
 async def save_entry(
     date: str,
     summary: str,
-    mood: str | None = None,
-    transcript: list[dict[str, str]] | None = None,
+    mood: str,
+    transcript: list[dict[str, str]],
 ) -> str:
     """Persist a journaling session and embed its summary.
 

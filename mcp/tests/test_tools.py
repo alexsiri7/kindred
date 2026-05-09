@@ -61,7 +61,12 @@ async def test_save_entry_inserts_then_embeds(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr(embeddings, "embed", fake_embed)
     monkeypatch.setattr(db, "insert_embedding", fake_insert_embedding)
 
-    result = await entry_tools.save_entry("2026-05-01", "today was hard")
+    result = await entry_tools.save_entry(
+        "2026-05-01",
+        "today was hard",
+        "heavy",
+        [{"role": "user", "content": "today was hard"}],
+    )
     assert result == ENTRY_ID
     assert calls == ["insert_entry", "embed", "insert_embedding"]
 
