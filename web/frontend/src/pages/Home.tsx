@@ -2,6 +2,15 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { api, type EntrySummary } from '../api/client'
 import { useNavCounts } from '../store/navCounts'
+import { EntryCalendar } from '../components/EntryCalendar'
+
+/** Returns a local-time ISO date string "YYYY-MM-DD" without UTC shift. */
+function toLocalISO(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
 
 function formatEntryDate(dateStr: string) {
   const d = new Date(dateStr + 'T12:00')
@@ -11,6 +20,11 @@ function formatEntryDate(dateStr: string) {
     monthShort: d.toLocaleDateString('en-US', { month: 'short' }),
     month: d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
   }
+}
+
+function formatSelectedLabel(dateStr: string): string {
+  const d = new Date(dateStr + 'T12:00')
+  return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
 }
 
 function groupByMonth(entries: EntrySummary[]): Record<string, EntrySummary[]> {
@@ -30,6 +44,9 @@ function truncate(s: string, n: number): string {
 export function Home() {
   const [entries, setEntries] = useState<EntrySummary[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [selectedDate, setSelectedDate] = useState<string | null>(
+    () => toLocalISO(new Date()),
+  )
 
   useEffect(() => {
     let stale = false
@@ -48,7 +65,18 @@ export function Home() {
     }
   }, [])
 
-  const byMonth = entries ? groupByMonth(entries) : {}
+  const todayStr = toLocalISO(new Date())
+
+  const filtered = entries
+    ? selectedDate
+      ? entries.filter((e) => e.date === selectedDate)
+      : entries
+    : []
+
+  const byMonth = groupByMonth(filtered)
+
+  const selectedLabel = selectedDate ? formatSelectedLabel(selectedDate) : ''
+  const isToday = selectedDate === todayStr
 
   return (
     <>
@@ -73,44 +101,73 @@ export function Home() {
         </span>
       </div>
 
-      {entries?.length === 0 && (
-        <p style={{ color: 'var(--ink-3)' }}>
-          No entries yet. Start a journaling session in your AI assistant.
-        </p>
-      )}
-
-      {Object.entries(byMonth).map(([month, items]) => (
-        <div key={month}>
-          <div className="month-div">{month}</div>
-          {items.map((entry) => {
-            const { day, weekday, monthShort } = formatEntryDate(entry.date)
-            const title = truncate(entry.summary, 80)
-            const body = truncate(entry.summary, 200)
-
-            return (
-              <Link
-                key={entry.id}
-                to={`/app/entries/${entry.id}`}
-                style={{ textDecoration: 'none', color: 'inherit' }}
-              >
-                <div className="entry-row">
-                  <div className="entry-date">
-                    <span className="day">{day}</span>
-                    {monthShort} · {weekday}
-                  </div>
-                  <div className="entry-body">
-                    <h3>{title}</h3>
-                    <p>{body}</p>
-                  </div>
-                  <div className="entry-meta">
-                    {entry.mood && <span className="mood">◉ {entry.mood}</span>}
-                  </div>
+      {entries !== null && (
+        <div className="entries-layout">
+          <div className="entries-col">
+            {selectedDate && (
+              <div className="filter-bar">
+                <div className="filter-bar-label">
+                  <span className="filter-bar-eye">Showing</span>
+                  <em>{selectedLabel}</em>
+                  {isToday && <span className="filter-bar-pill">today</span>}
                 </div>
-              </Link>
-            )
-          })}
+                <button className="filter-bar-clear" onClick={() => setSelectedDate(null)}>
+                  Show all entries ›
+                </button>
+              </div>
+            )}
+
+            {entries.length === 0 ? (
+              <p style={{ color: 'var(--ink-3)' }}>
+                No entries yet. Start a journaling session in your AI assistant.
+              </p>
+            ) : selectedDate && filtered.length === 0 ? (
+              <div className="empty-day">
+                <div className="empty-day-mark">— no entry —</div>
+                <p>
+                  Nothing was written on <em>{selectedLabel}</em>.{' '}
+                  {isToday && 'Open Kindred in Claude to start one.'}
+                </p>
+              </div>
+            ) : (
+              Object.entries(byMonth).map(([month, items]) => (
+                <div key={month}>
+                  <div className="month-div">{month}</div>
+                  {items.map((entry) => {
+                    const { day, weekday, monthShort } = formatEntryDate(entry.date)
+                    const title = truncate(entry.summary, 80)
+                    const body = truncate(entry.summary, 200)
+
+                    return (
+                      <Link
+                        key={entry.id}
+                        to={`/app/entries/${entry.id}`}
+                        style={{ textDecoration: 'none', color: 'inherit' }}
+                      >
+                        <div className="entry-row">
+                          <div className="entry-date">
+                            <span className="day">{day}</span>
+                            {monthShort} · {weekday}
+                          </div>
+                          <div className="entry-body">
+                            <h3>{title}</h3>
+                            <p>{body}</p>
+                          </div>
+                          <div className="entry-meta">
+                            {entry.mood && <span className="mood">◉ {entry.mood}</span>}
+                          </div>
+                        </div>
+                      </Link>
+                    )
+                  })}
+                </div>
+              ))
+            )}
+          </div>
+
+          <EntryCalendar entries={entries} selected={selectedDate} onSelect={setSelectedDate} />
         </div>
-      ))}
+      )}
     </>
   )
 }
