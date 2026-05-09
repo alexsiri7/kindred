@@ -3,9 +3,9 @@ from __future__ import annotations
 from typing import Any
 
 import jwt
-from jwt import PyJWKClient
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jwt import PyJWKClient
 
 from settings import settings
 
