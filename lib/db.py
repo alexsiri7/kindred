@@ -150,6 +150,23 @@ def list_recent_entries(
     return list(res.data or [])
 
 
+def delete_entry(user_id: str, jwt_token: str | None, entry_id: str) -> None:
+    (
+        _table(user_id, jwt_token, "entry_embeddings")
+        .delete()
+        .eq("user_id", user_id)
+        .eq("entry_id", entry_id)
+        .execute()
+    )
+    (
+        _table(user_id, jwt_token, "entries")
+        .delete()
+        .eq("user_id", user_id)
+        .eq("id", entry_id)
+        .execute()
+    )
+
+
 # ---------------------------------------------------------------------------
 # embeddings + semantic search
 # ---------------------------------------------------------------------------
@@ -381,6 +398,7 @@ async def update_user_metadata(
 
 __all__ = [
     "anon_client",
+    "delete_entry",
     "find_pattern_by_name",
     "get_entry_by_date",
     "get_entry_by_id",
