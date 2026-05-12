@@ -37,7 +37,7 @@ async def get_current_user(
             algorithms=["ES256"],
             audience="authenticated",
         )
-    except (jwt.PyJWTError, Exception) as exc:
+    except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
         ) from exc
