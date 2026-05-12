@@ -29,7 +29,7 @@ def _make_token(
     exp_delta: timedelta = timedelta(minutes=5),
 ) -> str:
     now = datetime.now(UTC)
-    claims: dict = {
+    claims = {
         "sub": sub,
         "email": email,
         "aud": aud,
