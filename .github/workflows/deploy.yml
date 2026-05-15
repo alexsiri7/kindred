@@ -1,10 +1,11 @@
-name: Deploy
+name: Staging → Production Pipeline
 
 on:
   workflow_run:
     workflows: [CI]
     types: [completed]
     branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: railway-deploy
@@ -14,28 +15,36 @@ permissions:
   contents: read
   deployments: write
 
-# Deploys to Railway only when every CI job (gates + docker-build) passes on main.
-# Uses `railway up` from the repo root so Railway sees the full build context
-# (including lib/) regardless of the dashboard "Root Directory" setting —
-# eliminating the recurring Root Directory drift failure mode.
+# Deploys to Railway staging first, runs a health-check gate, then promotes the
+# same commit SHA to production. Both the web and mcp services follow this path.
 #
-# Required one-time operator setup (see docs/runbook-railway.md § CI-driven deploy):
-#   1. RAILWAY_TOKEN — GitHub Settings → Secrets and variables → Actions
-#   2. Railway dashboard → web service → Settings → Source:
-#        Config-as-code Path = web/railway.toml  (so Railway picks the right Dockerfile)
-#   3. Railway dashboard → both services → Settings → Source:
-#        Disable "Deploy on push" to avoid double-deploys from Railway's GitHub integration.
-#   VITE_* build variables stay in Railway — no changes needed there.
+# Required secrets (one-time operator setup — see docs/runbook-railway.md):
+#   RAILWAY_TOKEN                    — project-scoped Railway token
+#   RAILWAY_PROJECT_ID               — Railway project UUID
+#   RAILWAY_STAGING_WEB_SERVICE_ID   — staging web service UUID
+#   RAILWAY_STAGING_WEB_ENV_ID       — staging environment UUID
+#   RAILWAY_STAGING_MCP_SERVICE_ID   — staging mcp service UUID
+#   RAILWAY_STAGING_MCP_ENV_ID       — staging environment UUID (same as above)
+#   RAILWAY_WEB_SERVICE_ID           — prod web service UUID
+#   RAILWAY_WEB_ENV_ID               — prod environment UUID
+#   RAILWAY_MCP_SERVICE_ID           — prod mcp service UUID
+#   RAILWAY_MCP_ENV_ID               — prod environment UUID (same as above)
 
 jobs:
-  deploy:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+  # ── Stage 1: Deploy to staging ────────────────────────────────────────
+  deploy-staging:
+    name: Deploy to Staging
     runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
     timeout-minutes: 15
+    outputs:
+      skip: ${{ steps.secrets.outputs.skip }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Check required secrets
         id: secrets
@@ -47,8 +56,6 @@ jobs:
           if [ -z "${RAILWAY_TOKEN//[[:space:]]/}" ]; then missing+=("RAILWAY_TOKEN"); fi
           if [ ${#missing[@]} -gt 0 ]; then
             echo "::notice::Railway deploy skipped — required secrets not configured: ${missing[*]}."
-            echo "::notice::Add ${missing[*]} in GitHub Settings → Secrets and variables → Actions."
-            echo "::notice::See docs/runbook-railway.md for one-time operator setup instructions."
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
@@ -58,44 +65,306 @@ jobs:
         if: steps.secrets.outputs.skip != 'true'
         run: npm install -g @railway/cli@4
 
-      - name: Deploy web service
+      - name: Deploy web service to staging
         if: steps.secrets.outputs.skip != 'true'
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-        run: railway up --service web
+        run: railway up --service web --environment staging
 
-      - name: Deploy mcp service
+      - name: Deploy mcp service to staging
         if: steps.secrets.outputs.skip != 'true'
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-        run: railway up --service mcp
+        run: railway up --service mcp --environment staging
+
+  # ── Stage 2: Gate on staging health ───────────────────────────────────
+  staging-health:
+    name: Staging Health Gate
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    if: needs.deploy-staging.outputs.skip != 'true'
+    outputs:
+      sha: ${{ steps.get-sha.outputs.sha }}
+    steps:
+      - name: Get commit SHA
+        id: get-sha
+        run: |
+          SHA="${{ github.event.workflow_run.head_sha || github.sha }}"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for healthy staging web deploy
+        run: |
+          MAX_ATTEMPTS=20
+          INTERVAL=30
+          echo "Polling staging web health every ${INTERVAL}s (up to ${MAX_ATTEMPTS} attempts)..."
+          for i in $(seq 1 $MAX_ATTEMPTS); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 \
+              https://kindred-web-staging.up.railway.app/healthz)
+            if [ "$STATUS" = "200" ]; then
+              echo "✓ Staging web health check passed after $((i * INTERVAL))s"
+              break
+            fi
+            echo "Attempt $i/$MAX_ATTEMPTS: HTTP $STATUS, retrying in ${INTERVAL}s..."
+            if [ "$i" = "$MAX_ATTEMPTS" ]; then
+              echo "::error::Staging web health check failed after $MAX_ATTEMPTS attempts"
+              exit 1
+            fi
+            sleep $INTERVAL
+          done
+
+      - name: Wait for healthy staging mcp deploy
+        run: |
+          MAX_ATTEMPTS=20
+          INTERVAL=30
+          echo "Polling staging mcp health every ${INTERVAL}s (up to ${MAX_ATTEMPTS} attempts)..."
+          for i in $(seq 1 $MAX_ATTEMPTS); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 \
+              https://kindred-mcp-staging.up.railway.app/healthz)
+            if [ "$STATUS" = "200" ]; then
+              echo "✓ Staging mcp health check passed after $((i * INTERVAL))s"
+              break
+            fi
+            echo "Attempt $i/$MAX_ATTEMPTS: HTTP $STATUS, retrying in ${INTERVAL}s..."
+            if [ "$i" = "$MAX_ATTEMPTS" ]; then
+              echo "::error::Staging mcp health check failed after $MAX_ATTEMPTS attempts"
+              exit 1
+            fi
+            sleep $INTERVAL
+          done
+
+  # ── Stage 3: Deploy to production ─────────────────────────────────────
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [staging-health, deploy-staging]
+    if: needs.deploy-staging.outputs.skip != 'true'
+    timeout-minutes: 10
+    steps:
+      - name: Verify staging deployments and promote to production
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+          RAILWAY_STAGING_WEB_SERVICE_ID: ${{ secrets.RAILWAY_STAGING_WEB_SERVICE_ID }}
+          RAILWAY_STAGING_WEB_ENV_ID: ${{ secrets.RAILWAY_STAGING_WEB_ENV_ID }}
+          RAILWAY_STAGING_MCP_SERVICE_ID: ${{ secrets.RAILWAY_STAGING_MCP_SERVICE_ID }}
+          RAILWAY_STAGING_MCP_ENV_ID: ${{ secrets.RAILWAY_STAGING_MCP_ENV_ID }}
+          RAILWAY_WEB_SERVICE_ID: ${{ secrets.RAILWAY_WEB_SERVICE_ID }}
+          RAILWAY_WEB_ENV_ID: ${{ secrets.RAILWAY_WEB_ENV_ID }}
+          RAILWAY_MCP_SERVICE_ID: ${{ secrets.RAILWAY_MCP_SERVICE_ID }}
+          RAILWAY_MCP_ENV_ID: ${{ secrets.RAILWAY_MCP_ENV_ID }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${RAILWAY_TOKEN//[[:space:]]/}" ]; then
+            echo "::error::RAILWAY_TOKEN not set — cannot deploy to production"
+            exit 1
+          fi
+
+          promote_service() {
+            local label="$1"
+            local staging_service_id="$2"
+            local staging_env_id="$3"
+            local prod_service_id="$4"
+            local prod_env_id="$5"
+
+            echo "Fetching latest staging deployment for $label..."
+            RESPONSE=$(curl -s -X POST https://backboard.railway.app/graphql/v2 \
+              -H "Authorization: Bearer $RAILWAY_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "{
+                \"query\": \"query { deployments(input: { projectId: \\\"$RAILWAY_PROJECT_ID\\\", serviceId: \\\"$staging_service_id\\\", environmentId: \\\"$staging_env_id\\\" }, first: 1) { edges { node { id status meta } } } }\"
+              }")
+
+            STAGING_STATUS=$(echo "$RESPONSE" | jq -r '.data.deployments.edges[0].node.status // empty')
+            COMMIT=$(echo "$RESPONSE" | jq -r '.data.deployments.edges[0].node.meta.commitHash // empty')
+
+            if [ "$STAGING_STATUS" != "SUCCESS" ]; then
+              echo "::error::$label staging status is '$STAGING_STATUS', expected 'SUCCESS'"
+              exit 1
+            fi
+
+            echo "Promoting $label commit ${COMMIT:0:7} to production..."
+            DEPLOY=$(curl -s -X POST https://backboard.railway.app/graphql/v2 \
+              -H "Authorization: Bearer $RAILWAY_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "{
+                \"query\": \"mutation { serviceInstanceDeployV2(serviceId: \\\"$prod_service_id\\\", environmentId: \\\"$prod_env_id\\\", commitSha: \\\"$COMMIT\\\") }\"
+              }")
+
+            ERRORS=$(echo "$DEPLOY" | jq -r '.errors // empty')
+            if [ -n "$ERRORS" ] && [ "$ERRORS" != "null" ]; then
+              echo "::error::Railway API error promoting $label: $ERRORS"
+              exit 1
+            fi
+            echo "✓ $label production deploy triggered for commit ${COMMIT:0:7}"
+          }
+
+          promote_service "web" \
+            "$RAILWAY_STAGING_WEB_SERVICE_ID" "$RAILWAY_STAGING_WEB_ENV_ID" \
+            "$RAILWAY_WEB_SERVICE_ID" "$RAILWAY_WEB_ENV_ID"
+
+          promote_service "mcp" \
+            "$RAILWAY_STAGING_MCP_SERVICE_ID" "$RAILWAY_STAGING_MCP_ENV_ID" \
+            "$RAILWAY_MCP_SERVICE_ID" "$RAILWAY_MCP_ENV_ID"
 
       - name: Report deployment status
+        if: always()
         uses: actions/github-script@v7
-        env:
-          SKIP: ${{ steps.secrets.outputs.skip }}
         with:
           script: |
-            const sha = context.payload.workflow_run.head_sha;
-            // No environment filter: intentionally updates all environments for this SHA
-            // so the pipeline-health cron doesn't alert on any stale Railway deployment.
-            // Revisit if preview/staging deployments are added.
+            const sha = '${{ needs.staging-health.outputs.sha }}';
             const { data: deployments } = await github.rest.repos.listDeployments({
               owner: context.repo.owner,
               repo: context.repo.repo,
               sha,
-              per_page: 10, // 2 Railway services; 10 gives comfortable headroom
+              per_page: 10,
             });
-            const state = process.env.SKIP === 'true' ? 'inactive' : 'success';
-            const description = process.env.SKIP === 'true'
-              ? 'Deploy skipped — RAILWAY_TOKEN not configured'
-              : 'Deployed via CI';
+            const state = '${{ job.status }}' === 'success' ? 'success' : 'failure';
             for (const dep of deployments) {
               await github.rest.repos.createDeploymentStatus({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 deployment_id: dep.id,
                 state,
-                description,
+                description: state === 'success' ? 'Deployed via CI' : 'Deploy failed',
               });
             }
+
+  # ── Stage 4: Production health check + rollback ────────────────────────
+  health-check:
+    name: Production Health Check
+    runs-on: ubuntu-latest
+    needs: [deploy-production, deploy-staging]
+    if: needs.deploy-staging.outputs.skip != 'true'
+    outputs:
+      healthy: ${{ steps.mark-healthy.outputs.healthy }}
+    steps:
+      - name: Poll production health (web + mcp)
+        id: mark-healthy
+        run: |
+          MAX_ATTEMPTS=20
+          INTERVAL=30
+          HEALTHY=true
+
+          poll_service() {
+            local label="$1"
+            local url="$2"
+            echo "Polling production $label health every ${INTERVAL}s..."
+            for i in $(seq 1 $MAX_ATTEMPTS); do
+              STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "$url")
+              echo "[$label] Attempt $i/$MAX_ATTEMPTS: HTTP $STATUS"
+              if [ "$STATUS" = "200" ]; then
+                echo "✓ Production $label health check passed after $((i * INTERVAL))s"
+                return 0
+              fi
+              if [ "$i" = "$MAX_ATTEMPTS" ]; then
+                echo "::error::Production $label health check failed after $MAX_ATTEMPTS attempts"
+                return 1
+              fi
+              sleep $INTERVAL
+            done
+          }
+
+          poll_service "web" "https://kindred.up.railway.app/healthz" || HEALTHY=false
+          poll_service "mcp" "https://kindred-mcp.up.railway.app/healthz" || HEALTHY=false
+
+          echo "healthy=$HEALTHY" >> "$GITHUB_OUTPUT"
+
+  rollback:
+    name: Rollback Production
+    runs-on: ubuntu-latest
+    needs: health-check
+    if: needs.health-check.outputs.healthy == 'false'
+    permissions:
+      issues: write
+      contents: read
+    steps:
+      - name: Attempt Railway rollback (web)
+        id: rollback
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+          RAILWAY_WEB_SERVICE_ID: ${{ secrets.RAILWAY_WEB_SERVICE_ID }}
+          RAILWAY_WEB_ENV_ID: ${{ secrets.RAILWAY_WEB_ENV_ID }}
+        run: |
+          if [ -z "${RAILWAY_TOKEN//[[:space:]]/}" ]; then
+            echo "::warning::RAILWAY_TOKEN not set, skipping automated rollback"
+            echo "rollback_attempted=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          RESPONSE=$(curl -s -X POST https://backboard.railway.app/graphql/v2 \
+            -H "Authorization: Bearer $RAILWAY_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"query\": \"query { deployments(input: { projectId: \\\"$RAILWAY_PROJECT_ID\\\", serviceId: \\\"$RAILWAY_WEB_SERVICE_ID\\\", environmentId: \\\"$RAILWAY_WEB_ENV_ID\\\" }, first: 2) { edges { node { id status } } } }\"}")
+          CURRENT_ID=$(echo "$RESPONSE" | jq -r '.data.deployments.edges[0].node.id // empty')
+          if [ -z "$CURRENT_ID" ]; then
+            echo "::warning::Could not find current web deployment to rollback"
+            echo "rollback_attempted=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          ROLLBACK=$(curl -s -X POST https://backboard.railway.app/graphql/v2 \
+            -H "Authorization: Bearer $RAILWAY_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"query\": \"mutation { deploymentRollback(id: \\\"$CURRENT_ID\\\") }\"}")
+          echo "rollback_attempted=true" >> "$GITHUB_OUTPUT"
+          echo "✓ Web rollback initiated"
+
+      - name: Attempt Railway rollback (mcp)
+        id: rollback-mcp
+        if: always()
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+          RAILWAY_MCP_SERVICE_ID: ${{ secrets.RAILWAY_MCP_SERVICE_ID }}
+          RAILWAY_MCP_ENV_ID: ${{ secrets.RAILWAY_MCP_ENV_ID }}
+        run: |
+          if [ -z "${RAILWAY_TOKEN//[[:space:]]/}" ]; then
+            echo "::warning::RAILWAY_TOKEN not set, skipping automated mcp rollback"
+            exit 0
+          fi
+          RESPONSE=$(curl -s -X POST https://backboard.railway.app/graphql/v2 \
+            -H "Authorization: Bearer $RAILWAY_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"query\": \"query { deployments(input: { projectId: \\\"$RAILWAY_PROJECT_ID\\\", serviceId: \\\"$RAILWAY_MCP_SERVICE_ID\\\", environmentId: \\\"$RAILWAY_MCP_ENV_ID\\\" }, first: 2) { edges { node { id status } } } }\"}")
+          CURRENT_ID=$(echo "$RESPONSE" | jq -r '.data.deployments.edges[0].node.id // empty')
+          if [ -z "$CURRENT_ID" ]; then
+            echo "::warning::Could not find current mcp deployment to rollback"
+            exit 0
+          fi
+          ROLLBACK=$(curl -s -X POST https://backboard.railway.app/graphql/v2 \
+            -H "Authorization: Bearer $RAILWAY_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"query\": \"mutation { deploymentRollback(id: \\\"$CURRENT_ID\\\") }\"}")
+          echo "✓ MCP rollback initiated"
+
+      - name: Create failure issue
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const rollbackAttempted = '${{ steps.rollback.outputs.rollback_attempted }}' === 'true';
+            const sha = context.payload?.workflow_run?.head_sha || context.sha || 'unknown';
+            const shortSha = sha.substring(0, 7);
+            const body = [
+              `## Production Deploy Failed`,
+              ``,
+              `Health check failed after deploy of ${shortSha}.`,
+              ``,
+              rollbackAttempted
+                ? '**Automatic rollback was initiated.** Verify production is healthy.'
+                : '**Automatic rollback was not attempted** (RAILWAY_TOKEN not set). Manual rollback required.',
+              ``,
+              `### Manual rollback steps`,
+              `1. Go to Railway Dashboard → Kindred project → Deployments`,
+              `2. Find the last known-good deployment and click "Rollback"`,
+              `3. Or: \`git revert ${shortSha} && git push origin main\``,
+              ``,
+              `Triggered by: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            ].join('\n');
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Production deploy failed — health check (${shortSha})`,
+              body,
+              labels: ['bug', 'production'],
+            });
