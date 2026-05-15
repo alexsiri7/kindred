@@ -39,6 +39,8 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
     timeout-minutes: 15
+    outputs:
+      skip: ${{ steps.secrets.outputs.skip }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -80,6 +82,7 @@ jobs:
     name: Staging Health Gate
     runs-on: ubuntu-latest
     needs: deploy-staging
+    if: needs.deploy-staging.outputs.skip != 'true'
     outputs:
       sha: ${{ steps.get-sha.outputs.sha }}
     steps:
@@ -102,11 +105,11 @@ jobs:
               break
             fi
             echo "Attempt $i/$MAX_ATTEMPTS: HTTP $STATUS, retrying in ${INTERVAL}s..."
-            sleep $INTERVAL
             if [ "$i" = "$MAX_ATTEMPTS" ]; then
               echo "::error::Staging web health check failed after $MAX_ATTEMPTS attempts"
               exit 1
             fi
+            sleep $INTERVAL
           done
 
       - name: Wait for healthy staging mcp deploy
@@ -122,18 +125,20 @@ jobs:
               break
             fi
             echo "Attempt $i/$MAX_ATTEMPTS: HTTP $STATUS, retrying in ${INTERVAL}s..."
-            sleep $INTERVAL
             if [ "$i" = "$MAX_ATTEMPTS" ]; then
               echo "::error::Staging mcp health check failed after $MAX_ATTEMPTS attempts"
               exit 1
             fi
+            sleep $INTERVAL
           done
 
   # ── Stage 3: Deploy to production ─────────────────────────────────────
   deploy-production:
     name: Deploy to Production
     runs-on: ubuntu-latest
-    needs: staging-health
+    needs: [staging-health, deploy-staging]
+    if: needs.deploy-staging.outputs.skip != 'true'
+    timeout-minutes: 10
     steps:
       - name: Verify staging deployments and promote to production
         env:
@@ -229,35 +234,50 @@ jobs:
   health-check:
     name: Production Health Check
     runs-on: ubuntu-latest
-    needs: deploy-production
+    needs: [deploy-production, deploy-staging]
+    if: needs.deploy-staging.outputs.skip != 'true'
     outputs:
-      healthy: ${{ steps.check.outputs.healthy }}
+      healthy: ${{ steps.mark-healthy.outputs.healthy }}
     steps:
-      - name: Poll production web health
-        id: check
+      - name: Poll production health (web + mcp)
+        id: mark-healthy
         run: |
-          HEALTH_URL="https://kindred.up.railway.app/healthz"
           MAX_ATTEMPTS=20
           INTERVAL=30
-          echo "Polling production health every ${INTERVAL}s..."
-          for i in $(seq 1 $MAX_ATTEMPTS); do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "$HEALTH_URL")
-            echo "Attempt $i/$MAX_ATTEMPTS: HTTP $STATUS"
-            if [ "$STATUS" = "200" ]; then
-              echo "healthy=true" >> "$GITHUB_OUTPUT"
-              echo "✓ Production health check passed after $((i * INTERVAL))s"
-              exit 0
-            fi
-            sleep $INTERVAL
-          done
-          echo "healthy=false" >> "$GITHUB_OUTPUT"
-          echo "::error::Production health check failed after $MAX_ATTEMPTS attempts"
+          HEALTHY=true
+
+          poll_service() {
+            local label="$1"
+            local url="$2"
+            echo "Polling production $label health every ${INTERVAL}s..."
+            for i in $(seq 1 $MAX_ATTEMPTS); do
+              STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "$url")
+              echo "[$label] Attempt $i/$MAX_ATTEMPTS: HTTP $STATUS"
+              if [ "$STATUS" = "200" ]; then
+                echo "✓ Production $label health check passed after $((i * INTERVAL))s"
+                return 0
+              fi
+              if [ "$i" = "$MAX_ATTEMPTS" ]; then
+                echo "::error::Production $label health check failed after $MAX_ATTEMPTS attempts"
+                return 1
+              fi
+              sleep $INTERVAL
+            done
+          }
+
+          poll_service "web" "https://kindred.up.railway.app/healthz" || HEALTHY=false
+          poll_service "mcp" "https://kindred-mcp.up.railway.app/healthz" || HEALTHY=false
+
+          echo "healthy=$HEALTHY" >> "$GITHUB_OUTPUT"
 
   rollback:
     name: Rollback Production
     runs-on: ubuntu-latest
     needs: health-check
     if: needs.health-check.outputs.healthy == 'false'
+    permissions:
+      issues: write
+      contents: read
     steps:
       - name: Attempt Railway rollback (web)
         id: rollback
@@ -288,6 +308,34 @@ jobs:
             -d "{\"query\": \"mutation { deploymentRollback(id: \\\"$CURRENT_ID\\\") }\"}")
           echo "rollback_attempted=true" >> "$GITHUB_OUTPUT"
           echo "✓ Web rollback initiated"
+
+      - name: Attempt Railway rollback (mcp)
+        id: rollback-mcp
+        if: always()
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+          RAILWAY_MCP_SERVICE_ID: ${{ secrets.RAILWAY_MCP_SERVICE_ID }}
+          RAILWAY_MCP_ENV_ID: ${{ secrets.RAILWAY_MCP_ENV_ID }}
+        run: |
+          if [ -z "${RAILWAY_TOKEN//[[:space:]]/}" ]; then
+            echo "::warning::RAILWAY_TOKEN not set, skipping automated mcp rollback"
+            exit 0
+          fi
+          RESPONSE=$(curl -s -X POST https://backboard.railway.app/graphql/v2 \
+            -H "Authorization: Bearer $RAILWAY_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"query\": \"query { deployments(input: { projectId: \\\"$RAILWAY_PROJECT_ID\\\", serviceId: \\\"$RAILWAY_MCP_SERVICE_ID\\\", environmentId: \\\"$RAILWAY_MCP_ENV_ID\\\" }, first: 2) { edges { node { id status } } } }\"}")
+          CURRENT_ID=$(echo "$RESPONSE" | jq -r '.data.deployments.edges[0].node.id // empty')
+          if [ -z "$CURRENT_ID" ]; then
+            echo "::warning::Could not find current mcp deployment to rollback"
+            exit 0
+          fi
+          ROLLBACK=$(curl -s -X POST https://backboard.railway.app/graphql/v2 \
+            -H "Authorization: Bearer $RAILWAY_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"query\": \"mutation { deploymentRollback(id: \\\"$CURRENT_ID\\\") }\"}")
+          echo "✓ MCP rollback initiated"
 
       - name: Create failure issue
         if: always()
