@@ -52,16 +52,16 @@ def test_no_sessions_is_noop() -> None:
 def test_valid_session_unchanged() -> None:
     """Session with fresh access token: entry is not modified."""
     _seed_session(access_token_age_seconds=60)  # issued 1 minute ago
+    original_issued_at = oauth_state.refresh_tokens["rt-abc"]["access_token_issued_at"]
     _proactive_refresh()
     assert "rt-abc" in oauth_state.refresh_tokens
     entry = oauth_state.refresh_tokens["rt-abc"]
-    # access_token_issued_at should NOT have been updated
-    age = (datetime.now(UTC) - entry["access_token_issued_at"]).total_seconds()
-    assert age >= 60  # still the original timestamp (± small clock skew)
+    # access_token_issued_at must not have been touched
+    assert entry["access_token_issued_at"] == original_issued_at
 
 
 def test_expired_access_token_updates_issued_at() -> None:
-    """Session with expired access token: access_token_issued_at is refreshed."""
+    """Session with expired access token: access_token_issued_at is reset to expired."""
     expired_age = JWT_EXPIRY_SECONDS + 3600  # 1 hour past expiry
     _seed_session(access_token_age_seconds=expired_age)
     before = datetime.now(UTC)
@@ -69,11 +69,15 @@ def test_expired_access_token_updates_issued_at() -> None:
     after = datetime.now(UTC)
     assert "rt-abc" in oauth_state.refresh_tokens
     entry = oauth_state.refresh_tokens["rt-abc"]
-    assert before <= entry["access_token_issued_at"] <= after
+    # Flagged: issued_at is reset to (now - JWT_EXPIRY_SECONDS) so next grant mints fresh
+    reset_at = entry["access_token_issued_at"]
+    assert (before - timedelta(seconds=JWT_EXPIRY_SECONDS)) <= reset_at <= (
+        after - timedelta(seconds=JWT_EXPIRY_SECONDS)
+    )
 
 
 def test_near_expiry_access_token_is_refreshed() -> None:
-    """Session with access token expiring in <5 min: proactively refreshed."""
+    """Session with access token expiring in <5 min: flagged for refresh."""
     # Issued almost JWT_EXPIRY_SECONDS ago (3 min left)
     near_expiry_age = JWT_EXPIRY_SECONDS - 3 * 60
     _seed_session(access_token_age_seconds=near_expiry_age)
@@ -81,7 +85,11 @@ def test_near_expiry_access_token_is_refreshed() -> None:
     _proactive_refresh()
     after = datetime.now(UTC)
     entry = oauth_state.refresh_tokens["rt-abc"]
-    assert before <= entry["access_token_issued_at"] <= after
+    # Flagged: issued_at is reset to (now - JWT_EXPIRY_SECONDS) so next grant mints fresh
+    reset_at = entry["access_token_issued_at"]
+    assert (before - timedelta(seconds=JWT_EXPIRY_SECONDS)) <= reset_at <= (
+        after - timedelta(seconds=JWT_EXPIRY_SECONDS)
+    )
 
 
 def test_expired_refresh_token_is_dropped() -> None:
@@ -128,3 +136,52 @@ def test_missing_access_token_issued_at_is_skipped() -> None:
     }
     _proactive_refresh()  # must not raise
     assert "rt-old" in oauth_state.refresh_tokens  # entry preserved
+
+
+def test_no_secret_key_is_noop(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """If SECRET_KEY is not set, _proactive_refresh() must log a warning and return."""
+    import logging
+
+    monkeypatch.setattr(settings_module.settings, "secret_key", "")
+    oauth_state.refresh_tokens["rt-any"] = {
+        "user_id": USER_ID,
+        "email": None,
+        "client_id": "client-1",
+        "scope": "mcp",
+        "expires_at": datetime.now(UTC) + timedelta(days=1),
+        "access_token_issued_at": datetime.now(UTC),
+    }
+    with caplog.at_level(logging.WARNING, logger="oauth"):
+        _proactive_refresh()
+    # Entry must NOT have been processed (function bailed out early)
+    assert "rt-any" in oauth_state.refresh_tokens
+    assert "SECRET_KEY" in caplog.text
+
+
+def test_missing_expires_at_is_not_dropped() -> None:
+    """Entry with expires_at=None must not be removed (guard prevents it)."""
+    oauth_state.refresh_tokens["rt-no-exp"] = {
+        "user_id": USER_ID,
+        "email": None,
+        "client_id": "client-1",
+        "scope": "mcp",
+        "expires_at": None,
+        "access_token_issued_at": datetime.now(UTC),
+    }
+    _proactive_refresh()
+    assert "rt-no-exp" in oauth_state.refresh_tokens
+
+
+def test_build_app_calls_proactive_refresh(monkeypatch: pytest.MonkeyPatch) -> None:
+    """build_app() must invoke _proactive_refresh() exactly once on startup."""
+    import importlib
+    from unittest.mock import MagicMock
+
+    import main
+
+    mock_refresh = MagicMock()
+    monkeypatch.setattr("oauth._proactive_refresh", mock_refresh)
+    importlib.reload(main)
+    mock_refresh.assert_called_once()
