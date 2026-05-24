@@ -34,6 +34,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, RedirectResponse, Response
 
 from oauth_state import (
+    _state_lock,
     auth_codes,
     cleanup_and_pop,
     cleanup_and_store,
@@ -104,6 +105,7 @@ def _issue_token_response(
             "scope": scope,
             "expires_at": datetime.now(UTC)
             + timedelta(seconds=REFRESH_TOKEN_TTL_SECONDS),
+            "access_token_issued_at": datetime.now(UTC),
         },
     )
     return JSONResponse(
@@ -115,6 +117,84 @@ def _issue_token_response(
             "scope": scope,
         }
     )
+
+
+_PROACTIVE_REFRESH_BUFFER = timedelta(minutes=5)
+
+
+def _proactive_refresh() -> None:
+    """On startup: scan loaded sessions and handle near-expiry or dead tokens.
+
+    For each loaded refresh-token session:
+    - If the refresh token is expired: log a warning and remove from memory.
+      The client will get a 401 directing them to re-authenticate.
+    - If the access token is expired or within ``_PROACTIVE_REFRESH_BUFFER``:
+      mint a fresh JWT and update ``access_token_issued_at`` in the in-memory
+      record (no refresh-token rotation — the client must still hold the old
+      refresh token to request new tokens via the normal grant).
+
+    This function is called once at startup inside ``build_app()`` after the
+    persistent store has been hydrated into ``refresh_tokens`` (by issue #125).
+    It is a no-op when the dict is empty (fresh deployment, no persisted sessions).
+    """
+    if not settings.secret_key:
+        logger.warning("proactive_refresh: SECRET_KEY not set, skipping")
+        return
+
+    now = datetime.now(UTC)
+    access_cutoff = now + _PROACTIVE_REFRESH_BUFFER
+
+    with _state_lock:
+        keys = list(refresh_tokens.keys())
+
+    refreshed = 0
+    dropped = 0
+    for token_key in keys:
+        entry = refresh_tokens.get(token_key)
+        if entry is None:
+            continue  # already evicted by concurrent cleanup
+
+        # --- expired refresh token: drop it ---
+        refresh_exp = entry.get("expires_at")
+        if (
+            refresh_exp is not None
+            and isinstance(refresh_exp, datetime)
+            and now > refresh_exp
+        ):
+            refresh_tokens.pop(token_key, None)
+            logger.warning(
+                "proactive_refresh: refresh token for user %s expired at %s — "
+                "user must re-authenticate",
+                entry.get("user_id", "unknown"),
+                refresh_exp.isoformat(),
+            )
+            dropped += 1
+            continue
+
+        # --- near-expiry or expired access token: mint a fresh JWT ---
+        issued_at: datetime | None = entry.get("access_token_issued_at")
+        if issued_at is None:
+            continue  # old record without the field; skip until next normal refresh
+
+        access_exp = issued_at + timedelta(seconds=JWT_EXPIRY_SECONDS)
+        if access_exp <= access_cutoff:
+            _create_jwt(entry["user_id"], entry.get("email"))
+            # Update in-place — no rotation, client's refresh token stays valid.
+            entry["access_token_issued_at"] = now
+            logger.info(
+                "proactive_refresh: minted fresh JWT for user %s (old access token "
+                "expired at %s)",
+                entry.get("user_id", "unknown"),
+                access_exp.isoformat(),
+            )
+            refreshed += 1
+
+    if refreshed or dropped:
+        logger.info(
+            "proactive_refresh complete: %d refreshed, %d dropped (expired refresh tokens)",
+            refreshed,
+            dropped,
+        )
 
 
 async def _verify_supabase_token(access_token: str) -> dict[str, Any] | None:

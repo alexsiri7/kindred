@@ -365,6 +365,9 @@ def build_app() -> ASGIApp:
     # parse-and-discard rather than building the limiter so the cached
     # instance still resolves lazily on first request.
     rate_limit._parse_per_tool_config(settings.mcp_rate_limit_per_tool)
+    from oauth import _proactive_refresh  # noqa: PLC0415
+
+    _proactive_refresh()
     return with_user_context(with_rate_limit(mcp.streamable_http_app()))
 
 
