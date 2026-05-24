@@ -165,7 +165,7 @@ def _proactive_refresh() -> None:
 
             # --- expired refresh token: drop it ---
             refresh_exp = entry.get("expires_at")
-            if refresh_exp is not None and isinstance(refresh_exp, datetime) and now > refresh_exp:
+            if isinstance(refresh_exp, datetime) and now > refresh_exp:
                 refresh_tokens.pop(token_key, None)
                 logger.warning(
                     "proactive_refresh: refresh token for user %s expired at %s — "

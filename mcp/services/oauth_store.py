@@ -146,8 +146,7 @@ def load_registered_clients() -> dict[str, dict[str, Any]]:
         rows = cast(list[dict[str, Any]], res.data or [])
         result: dict[str, dict[str, Any]] = {}
         for row in rows:
-            client_id = row.pop("client_id")
-            result[client_id] = {**row, "client_id": client_id}
+            result[row["client_id"]] = row
         logger.info("oauth_store: loaded %d registered client(s) from DB", len(result))
         return result
     except Exception:
