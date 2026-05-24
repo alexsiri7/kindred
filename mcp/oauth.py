@@ -93,6 +93,7 @@ def _issue_token_response(
     if not settings.secret_key:
         raise HTTPException(status_code=501, detail="SECRET_KEY not configured")
 
+    now = datetime.now(UTC)
     access_token = _create_jwt(user_id, email)
     refresh_token = secrets.token_urlsafe(32)
     cleanup_and_store(
@@ -103,9 +104,8 @@ def _issue_token_response(
             "email": email,
             "client_id": client_id,
             "scope": scope,
-            "expires_at": datetime.now(UTC)
-            + timedelta(seconds=REFRESH_TOKEN_TTL_SECONDS),
-            "access_token_issued_at": datetime.now(UTC),
+            "expires_at": now + timedelta(seconds=REFRESH_TOKEN_TTL_SECONDS),
+            "access_token_issued_at": now,
         },
     )
     return JSONResponse(

@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import importlib
+import logging
 from datetime import UTC, datetime, timedelta
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -108,8 +111,6 @@ def test_expired_refresh_token_is_dropped() -> None:
 
 def test_expired_refresh_token_logs_warning(caplog: pytest.LogCaptureFixture) -> None:
     """Expired refresh token: a warning with user_id is logged."""
-    import logging
-
     oauth_state.refresh_tokens["rt-dead"] = {
         "user_id": USER_ID,
         "email": None,
@@ -142,8 +143,6 @@ def test_no_secret_key_is_noop(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     """If SECRET_KEY is not set, _proactive_refresh() must log a warning and return."""
-    import logging
-
     monkeypatch.setattr(settings_module.settings, "secret_key", "")
     oauth_state.refresh_tokens["rt-any"] = {
         "user_id": USER_ID,
@@ -176,9 +175,6 @@ def test_missing_expires_at_is_not_dropped() -> None:
 
 def test_build_app_calls_proactive_refresh(monkeypatch: pytest.MonkeyPatch) -> None:
     """build_app() must invoke _proactive_refresh() exactly once on startup."""
-    import importlib
-    from unittest.mock import MagicMock
-
     import main
 
     mock_refresh = MagicMock()
