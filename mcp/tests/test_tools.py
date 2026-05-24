@@ -31,9 +31,7 @@ def _set_user() -> Any:
 async def test_save_entry_inserts_then_embeds(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[str] = []
 
-    def fake_insert_entry(
-        user_id: str, jwt_token: str | None, *args: Any, **kw: Any
-    ) -> str:
+    def fake_insert_entry(user_id: str, jwt_token: str | None, *args: Any, **kw: Any) -> str:
         assert user_id == USER_ID
         assert jwt_token is None
         calls.append("insert_entry")
@@ -129,9 +127,7 @@ async def test_log_occurrence_creates_pattern_when_missing(
 ) -> None:
     inserted: dict[str, Any] = {}
 
-    def fake_find(
-        user_id: str, jwt_token: str | None, name: str
-    ) -> dict[str, Any] | None:
+    def fake_find(user_id: str, jwt_token: str | None, name: str) -> dict[str, Any] | None:
         return None
 
     def fake_insert_pattern(
@@ -149,17 +145,13 @@ async def test_log_occurrence_creates_pattern_when_missing(
         inserted["typical"] = (t, e, b, s)
         return PATTERN_ID
 
-    def fake_get_entry(
-        user_id: str, jwt_token: str | None, entry_id: str
-    ) -> dict[str, Any]:
+    def fake_get_entry(user_id: str, jwt_token: str | None, entry_id: str) -> dict[str, Any]:
         return {"id": entry_id, "date": "2026-05-01"}
 
     def fake_insert_occ(*args: Any, **kw: Any) -> str:
         return OCCURRENCE_ID
 
-    def fake_update(
-        user_id: str, jwt_token: str | None, *args: Any, **kw: Any
-    ) -> None:
+    def fake_update(user_id: str, jwt_token: str | None, *args: Any, **kw: Any) -> None:
         assert user_id == USER_ID
         inserted["seen"] = True
 
@@ -202,9 +194,7 @@ async def test_log_occurrence_rejects_out_of_range_intensity() -> None:
 
 
 async def test_list_patterns(monkeypatch: pytest.MonkeyPatch) -> None:
-    def fake(
-        user_id: str, jwt_token: str | None, since: str | None
-    ) -> list[dict[str, Any]]:
+    def fake(user_id: str, jwt_token: str | None, since: str | None) -> list[dict[str, Any]]:
         assert user_id == USER_ID
         return [{"id": PATTERN_ID, "name": "Sunday dread"}]
 
@@ -224,9 +214,7 @@ async def test_get_pattern(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 async def test_list_occurrences(monkeypatch: pytest.MonkeyPatch) -> None:
-    def fake_find(
-        user_id: str, jwt_token: str | None, name: str
-    ) -> dict[str, Any]:
+    def fake_find(user_id: str, jwt_token: str | None, name: str) -> dict[str, Any]:
         return {"id": PATTERN_ID, "name": name}
 
     def fake_list(

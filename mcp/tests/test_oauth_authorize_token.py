@@ -13,6 +13,7 @@ import httpx
 import jwt
 import pytest
 
+import oauth
 import oauth_state
 import settings as settings_module
 from main import app
@@ -282,3 +283,32 @@ async def test_refresh_token_rotation(client: httpx.AsyncClient) -> None:
         data={"grant_type": "refresh_token", "refresh_token": refresh_1},
     )
     assert r3.status_code == 400
+
+
+async def test_token_rotation_calls_delete_refresh_token(
+    client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Token rotation (refresh_token grant) must call delete_refresh_token() on consumed token."""
+    deleted: list[str] = []
+    monkeypatch.setattr(oauth, "delete_refresh_token", lambda t: deleted.append(t))
+
+    verifier, _ = _pkce_pair()
+    _seed_auth_code(code="ac-del", verifier=verifier, redirect_uri="https://app/cb")
+    r1 = await client.post(
+        "/oauth/token",
+        data={
+            "grant_type": "authorization_code",
+            "code": "ac-del",
+            "redirect_uri": "https://app/cb",
+            "code_verifier": verifier,
+        },
+    )
+    assert r1.status_code == 200
+    refresh_token_1 = r1.json()["refresh_token"]
+
+    r2 = await client.post(
+        "/oauth/token",
+        data={"grant_type": "refresh_token", "refresh_token": refresh_token_1},
+    )
+    assert r2.status_code == 200
+    assert deleted == [refresh_token_1]

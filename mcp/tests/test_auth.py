@@ -128,9 +128,7 @@ def test_resolve_user_id_from_jwt_no_secret_configured(
 async def test_middleware_returns_401_with_www_authenticate(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(
-        settings_module.settings, "mcp_base_url", "https://test.example.com"
-    )
+    monkeypatch.setattr(settings_module.settings, "mcp_base_url", "https://test.example.com")
     from main import app
 
     async with httpx.AsyncClient(

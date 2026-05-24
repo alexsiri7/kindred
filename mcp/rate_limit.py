@@ -80,9 +80,7 @@ def _parse_per_tool_config(raw: str) -> dict[str, int]:
         try:
             limit = int(limit_s)
         except ValueError as e:
-            raise ValueError(
-                f"Non-integer limit in rate-limit pair {pair!r}"
-            ) from e
+            raise ValueError(f"Non-integer limit in rate-limit pair {pair!r}") from e
         out[name] = limit
     return out
 
@@ -179,11 +177,7 @@ class RateLimiter:
 
     def _evict_expired_locked(self, now: float) -> None:
         """Drop buckets whose window has fully elapsed. Caller holds ``_lock``."""
-        expired = [
-            k
-            for k, bucket in self._buckets.items()
-            if now - bucket[0] >= WINDOW_SECONDS
-        ]
+        expired = [k for k, bucket in self._buckets.items() if now - bucket[0] >= WINDOW_SECONDS]
         for k in expired:
             del self._buckets[k]
         if expired:

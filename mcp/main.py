@@ -51,7 +51,10 @@ mcp: FastMCP = FastMCP(
 # ---------------------------------------------------------------------------
 # OAuth 2.1 + discovery routes (registered as @mcp.custom_route())
 # ---------------------------------------------------------------------------
-from oauth import _proactive_refresh, register_routes as _register_oauth_routes  # noqa: E402,I001
+import oauth_state  # noqa: E402
+from oauth import _proactive_refresh  # noqa: E402,I001
+from oauth import register_routes as _register_oauth_routes  # noqa: E402
+from services.oauth_store import load_refresh_tokens, load_registered_clients  # noqa: E402
 
 _register_oauth_routes(mcp)
 
@@ -66,8 +69,7 @@ mcp.tool(
     description=(
         "Call at the end of a session. Always confirm the summary with the user "
         "before saving. Ask the user for a single mood word and the full conversation "
-        "transcript before calling."
-        + GUIDE_NUDGE
+        "transcript before calling." + GUIDE_NUDGE
     ),
 )(audited("save_entry")(entry_tools.save_entry))
 
@@ -79,8 +81,7 @@ mcp.tool(
 mcp.tool(
     description=(
         "Only call when the user asks about past entries. Do not surface past "
-        "entries unprompted."
-        + GUIDE_NUDGE
+        "entries unprompted." + GUIDE_NUDGE
     ),
     annotations=ToolAnnotations(readOnlyHint=True),
 )(audited("list_recent_entries")(entry_tools.list_recent_entries))
@@ -88,8 +89,7 @@ mcp.tool(
 mcp.tool(
     description=(
         "Only call when the user asks about past entries. Do not surface past "
-        "entries unprompted."
-        + GUIDE_NUDGE
+        "entries unprompted." + GUIDE_NUDGE
     ),
     annotations=ToolAnnotations(readOnlyHint=True),
 )(audited("search_entries")(entry_tools.search_entries))
@@ -97,8 +97,7 @@ mcp.tool(
 mcp.tool(
     description=(
         "Call after HCB analysis to check whether the examined moment matches a "
-        "recurring experience pattern before creating a new one."
-        + GUIDE_NUDGE
+        "recurring experience pattern before creating a new one." + GUIDE_NUDGE
     ),
     annotations=ToolAnnotations(readOnlyHint=True),
 )(audited("list_patterns")(pattern_tools.list_patterns))
@@ -112,8 +111,7 @@ mcp.tool(
     description=(
         "Call after completing HCB analysis with the user to record the occurrence "
         "against a named pattern. Call list_patterns first to find an existing match "
-        "before creating a new one. Never initiate HCB unprompted."
-        + GUIDE_NUDGE
+        "before creating a new one. Never initiate HCB unprompted." + GUIDE_NUDGE
     ),
 )(audited("log_occurrence")(pattern_tools.log_occurrence))
 
@@ -293,9 +291,7 @@ def with_rate_limit(app: ASGIApp, limiter: RateLimiter | None = None) -> ASGIApp
             try:
                 parsed = json.loads(body_bytes)
             except json.JSONDecodeError:
-                logger.debug(
-                    "rate_limit: body parse failed; per-tool cap will not apply"
-                )
+                logger.debug("rate_limit: body parse failed; per-tool cap will not apply")
                 parsed = None
             if isinstance(parsed, dict) and parsed.get("method") == "tools/call":
                 params = parsed.get("params")
@@ -365,6 +361,32 @@ def build_app() -> ASGIApp:
     # parse-and-discard rather than building the limiter so the cached
     # instance still resolves lazily on first request.
     rate_limit._parse_per_tool_config(settings.mcp_rate_limit_per_tool)
+    # Hydrate in-memory state from DB before _proactive_refresh() runs (issue #125)
+    loaded_tokens = load_refresh_tokens()
+    if len(loaded_tokens) > oauth_state.MAX_ENTRIES_PER_DICT:
+        logger.warning(
+            "oauth_store: loaded %d refresh tokens from DB, exceeds cap %d — truncating",
+            len(loaded_tokens),
+            oauth_state.MAX_ENTRIES_PER_DICT,
+        )
+        loaded_tokens = dict(
+            sorted(
+                loaded_tokens.items(),
+                key=lambda kv: kv[1].get("expires_at") or "",
+                reverse=True,
+            )[: oauth_state.MAX_ENTRIES_PER_DICT]
+        )
+    oauth_state.refresh_tokens.update(loaded_tokens)
+
+    loaded_clients = load_registered_clients()
+    if len(loaded_clients) > oauth_state.MAX_ENTRIES_PER_DICT:
+        logger.warning(
+            "oauth_store: loaded %d registered clients from DB, exceeds cap %d — truncating",
+            len(loaded_clients),
+            oauth_state.MAX_ENTRIES_PER_DICT,
+        )
+        loaded_clients = dict(list(loaded_clients.items())[: oauth_state.MAX_ENTRIES_PER_DICT])
+    oauth_state.registered_clients.update(loaded_clients)
     _proactive_refresh()
     return with_user_context(with_rate_limit(mcp.streamable_http_app()))
 

@@ -45,12 +45,8 @@ def _stub_search_tool(monkeypatch: pytest.MonkeyPatch) -> None:
     """Stub embeddings + db so search_entries and list_recent_entries
     tool bodies succeed without external dependencies."""
     monkeypatch.setattr(embeddings, "embed", lambda text: [0.0, 0.1, 0.2])
-    monkeypatch.setattr(
-        db, "match_entries", lambda user_id, jwt_token, vector, limit: []
-    )
-    monkeypatch.setattr(
-        db, "list_recent_entries", lambda user_id, jwt_token, limit: []
-    )
+    monkeypatch.setattr(db, "match_entries", lambda user_id, jwt_token, vector, limit: [])
+    monkeypatch.setattr(db, "list_recent_entries", lambda user_id, jwt_token, limit: [])
 
 
 def _tools_call(name: str, **arguments: Any) -> dict[str, Any]:
@@ -109,9 +105,7 @@ async def test_search_entries_per_tool_limit(
     monkeypatch: pytest.MonkeyPatch, _stub_auth: None, _stub_search_tool: None
 ) -> None:
     monkeypatch.setattr(settings_module.settings, "mcp_rate_limit_global_per_min", 1000)
-    monkeypatch.setattr(
-        settings_module.settings, "mcp_rate_limit_per_tool", "search_entries:1"
-    )
+    monkeypatch.setattr(settings_module.settings, "mcp_rate_limit_per_tool", "search_entries:1")
     monkeypatch.setattr(settings_module.settings, "mcp_rate_limit_disabled", False)
 
     from main import app
@@ -137,9 +131,7 @@ async def test_other_tool_unaffected_by_search_limit(
     monkeypatch: pytest.MonkeyPatch, _stub_auth: None, _stub_search_tool: None
 ) -> None:
     monkeypatch.setattr(settings_module.settings, "mcp_rate_limit_global_per_min", 1000)
-    monkeypatch.setattr(
-        settings_module.settings, "mcp_rate_limit_per_tool", "search_entries:1"
-    )
+    monkeypatch.setattr(settings_module.settings, "mcp_rate_limit_per_tool", "search_entries:1")
     monkeypatch.setattr(settings_module.settings, "mcp_rate_limit_disabled", False)
 
     from main import app
@@ -195,9 +187,7 @@ async def test_public_paths_not_rate_limited(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr(settings_module.settings, "mcp_rate_limit_global_per_min", 1)
     monkeypatch.setattr(settings_module.settings, "mcp_rate_limit_per_tool", "")
     monkeypatch.setattr(settings_module.settings, "mcp_rate_limit_disabled", False)
-    monkeypatch.setattr(
-        settings_module.settings, "mcp_base_url", "https://test.example.com"
-    )
+    monkeypatch.setattr(settings_module.settings, "mcp_base_url", "https://test.example.com")
 
     from main import app
 
@@ -224,9 +214,7 @@ async def test_unauthenticated_returns_401_not_429(
     monkeypatch.setattr(settings_module.settings, "mcp_rate_limit_global_per_min", 1)
     monkeypatch.setattr(settings_module.settings, "mcp_rate_limit_per_tool", "")
     monkeypatch.setattr(settings_module.settings, "mcp_rate_limit_disabled", False)
-    monkeypatch.setattr(
-        settings_module.settings, "mcp_base_url", "https://test.example.com"
-    )
+    monkeypatch.setattr(settings_module.settings, "mcp_base_url", "https://test.example.com")
 
     import main as main_module
 
@@ -307,9 +295,7 @@ async def test_429_log_does_not_leak_body(
     any log record (Review Focus Area #4 in scope.md).
     """
     monkeypatch.setattr(settings_module.settings, "mcp_rate_limit_global_per_min", 1000)
-    monkeypatch.setattr(
-        settings_module.settings, "mcp_rate_limit_per_tool", "search_entries:1"
-    )
+    monkeypatch.setattr(settings_module.settings, "mcp_rate_limit_per_tool", "search_entries:1")
     monkeypatch.setattr(settings_module.settings, "mcp_rate_limit_disabled", False)
 
     secret_query = "deeply-personal-journal-content-DO-NOT-LOG"

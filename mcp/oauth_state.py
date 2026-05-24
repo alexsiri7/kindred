@@ -2,9 +2,9 @@
 
 Four bounded dicts back the seven endpoints in ``oauth.py``. Expired entries
 are lazily purged on every store/retrieve, and each dict is hard-capped at
-``MAX_ENTRIES_PER_DICT`` to avoid unbounded growth. Persistence is intentionally
-not implemented — Railway redeploys are infrequent enough that re-registering
-on restart is acceptable.
+``MAX_ENTRIES_PER_DICT`` to avoid unbounded growth. Long-lived stores
+(``refresh_tokens`` and ``registered_clients``) are persisted to Supabase
+and hydrated at startup (see ``services/oauth_store.py``).
 """
 
 from __future__ import annotations
@@ -83,9 +83,7 @@ def cleanup_and_store(store: dict[str, Entry], key: str, value: Entry) -> None:
     with _state_lock:
         _cleanup_expired(store)
         if len(store) >= MAX_ENTRIES_PER_DICT:
-            raise StoreFullError(
-                f"OAuth state store is full ({MAX_ENTRIES_PER_DICT} entries)"
-            )
+            raise StoreFullError(f"OAuth state store is full ({MAX_ENTRIES_PER_DICT} entries)")
         store[key] = value
 
 

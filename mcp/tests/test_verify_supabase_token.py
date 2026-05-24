@@ -23,15 +23,11 @@ def _settings(monkeypatch: pytest.MonkeyPatch) -> None:
     # because ``test_settings.py`` calls ``importlib.reload(settings)`` and
     # diverges the two module-level references — ``oauth.py`` keeps its
     # original instance, so that's the one the helper actually reads.
-    monkeypatch.setattr(
-        oauth_module.settings, "supabase_url", "https://supabase.test.example.com"
-    )
+    monkeypatch.setattr(oauth_module.settings, "supabase_url", "https://supabase.test.example.com")
     monkeypatch.setattr(oauth_module.settings, "supabase_anon_key", "test-anon-key")
 
 
-def _install_transport(
-    monkeypatch: pytest.MonkeyPatch, handler: httpx.MockTransport
-) -> None:
+def _install_transport(monkeypatch: pytest.MonkeyPatch, handler: httpx.MockTransport) -> None:
     """Make ``httpx.AsyncClient(...)`` route through the given mock transport."""
     real_init = httpx.AsyncClient.__init__
 
