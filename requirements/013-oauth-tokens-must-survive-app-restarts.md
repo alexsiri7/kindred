@@ -1,8 +1,8 @@
 ---
 created: '2026-05-24'
-github_issue: null
+github_issue: 125
 id: '013'
-status: draft
+status: idea
 title: OAuth tokens must survive app restarts
 updated: '2026-05-24'
 ---
@@ -17,4 +17,5 @@ After an app restart, the MCP server resumes serving requests using previously-o
 
 ## Issues
 
-_None yet._
+- #125 — Persist OAuth tokens to durable storage instead of in-memory
+- #126 — Implement proactive token refresh so stored tokens don't expire while idle
