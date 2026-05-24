@@ -182,5 +182,7 @@ def test_build_app_calls_proactive_refresh(monkeypatch: pytest.MonkeyPatch) -> N
 
     mock_refresh = MagicMock()
     monkeypatch.setattr("oauth._proactive_refresh", mock_refresh)
+    monkeypatch.setattr("main.load_refresh_tokens", lambda: {})
+    monkeypatch.setattr("main.load_registered_clients", lambda: {})
     importlib.reload(main)
     mock_refresh.assert_called_once()

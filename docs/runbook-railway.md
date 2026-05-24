@@ -9,6 +9,13 @@ shared `lib/` package.
 - **Root Directory**: `/`
 - **Config-as-code Path**: `railway.toml` (default)
 - **Dockerfile**: `mcp/Dockerfile`
+- **Required runtime vars** (set in Railway → Variables):
+  - `SUPABASE_URL`
+  - `SUPABASE_ANON_KEY`
+  - `SUPABASE_SERVICE_ROLE_KEY` — used for server-internal OAuth token tables (issue #125)
+  - `SUPABASE_JWT_SECRET`
+  - `SECRET_KEY`
+  - `MCP_BASE_URL`
 
 ## Service: web
 

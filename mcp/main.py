@@ -362,8 +362,31 @@ def build_app() -> ASGIApp:
     # instance still resolves lazily on first request.
     rate_limit._parse_per_tool_config(settings.mcp_rate_limit_per_tool)
     # Hydrate in-memory state from DB before _proactive_refresh() runs (issue #125)
-    oauth_state.refresh_tokens.update(load_refresh_tokens())
-    oauth_state.registered_clients.update(load_registered_clients())
+    loaded_tokens = load_refresh_tokens()
+    if len(loaded_tokens) > oauth_state.MAX_ENTRIES_PER_DICT:
+        logger.warning(
+            "oauth_store: loaded %d refresh tokens from DB, exceeds cap %d — truncating",
+            len(loaded_tokens),
+            oauth_state.MAX_ENTRIES_PER_DICT,
+        )
+        loaded_tokens = dict(
+            sorted(
+                loaded_tokens.items(),
+                key=lambda kv: kv[1].get("expires_at") or "",
+                reverse=True,
+            )[: oauth_state.MAX_ENTRIES_PER_DICT]
+        )
+    oauth_state.refresh_tokens.update(loaded_tokens)
+
+    loaded_clients = load_registered_clients()
+    if len(loaded_clients) > oauth_state.MAX_ENTRIES_PER_DICT:
+        logger.warning(
+            "oauth_store: loaded %d registered clients from DB, exceeds cap %d — truncating",
+            len(loaded_clients),
+            oauth_state.MAX_ENTRIES_PER_DICT,
+        )
+        loaded_clients = dict(list(loaded_clients.items())[: oauth_state.MAX_ENTRIES_PER_DICT])
+    oauth_state.registered_clients.update(loaded_clients)
     _proactive_refresh()
     return with_user_context(with_rate_limit(mcp.streamable_http_app()))
 

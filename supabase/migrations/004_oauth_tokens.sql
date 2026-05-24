@@ -32,7 +32,7 @@ create table oauth_registered_clients (
     created_at         timestamptz not null default now()
 );
 
--- No RLS — these are server-internal tables, written only via service-role key.
+-- RLS enabled with no user-scoped policies — access is restricted to service-role key only.
 -- The MCP server never exposes raw token values to clients.
 alter table oauth_refresh_tokens enable row level security;
 alter table oauth_registered_clients enable row level security;

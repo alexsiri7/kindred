@@ -8,7 +8,7 @@ Wraps the two long-lived in-memory dicts in oauth_state:
 
 Uses the Supabase service-role client (SUPABASE_SERVICE_ROLE_KEY) because tokens
 are server-managed — they don't belong to any individual user row.
-All reads/writes are synchronous (called from sync FastAPI handlers).
+All reads/writes are synchronous blocking calls (called from async FastAPI handlers).
 """
 
 from __future__ import annotations
@@ -30,12 +30,13 @@ def _client() -> Client:
     if _service_client is None:
         from settings import settings as mcp_settings  # noqa: PLC0415
 
-        _service_client = create_client(
+        client = create_client(
             lib_settings.supabase_url,
             lib_settings.supabase_anon_key,
         )
         # Use service-role key to bypass RLS for server-internal tables
-        _service_client.postgrest.auth(mcp_settings.supabase_service_role_key)
+        client.postgrest.auth(mcp_settings.supabase_service_role_key)
+        _service_client = client  # assign only after full init
     return _service_client
 
 
@@ -71,11 +72,20 @@ def save_refresh_token(token: str, entry: dict[str, Any]) -> None:
 
 
 def delete_refresh_token(token: str) -> None:
-    """Delete a refresh token on consumption (rotation) or expiry."""
+    """Delete a refresh token on consumption (token rotation).
+
+    Note: expired tokens are not deleted here — they are filtered at load time
+    by ``load_refresh_tokens`` (``expires_at > now``). Dead rows accumulate
+    until a manual or scheduled cleanup runs.
+    """
     try:
         _client().table("oauth_refresh_tokens").delete().eq("token", token).execute()
     except Exception:
-        logger.exception("oauth_store: failed to delete refresh token %s", token[:8])
+        logger.exception(
+            "oauth_store: failed to delete refresh token %s — "
+            "token may be replayable after restart; consider manual cleanup",
+            token[:8],
+        )
 
 
 def load_refresh_tokens() -> dict[str, dict[str, Any]]:

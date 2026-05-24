@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
@@ -12,7 +13,7 @@ from oauth import REFRESH_TOKEN_TTL_SECONDS
 
 
 @pytest.fixture(autouse=True)
-def _clear_state():
+def _clear_state() -> None:
     oauth_state.refresh_tokens.clear()
     oauth_state.registered_clients.clear()
     yield
@@ -21,7 +22,7 @@ def _clear_state():
 
 
 @patch("services.oauth_store._client")
-def test_save_refresh_token_calls_upsert(mock_client):
+def test_save_refresh_token_calls_upsert(mock_client) -> None:
     from services.oauth_store import save_refresh_token
 
     entry = {
@@ -34,10 +35,17 @@ def test_save_refresh_token_calls_upsert(mock_client):
     }
     save_refresh_token("rt-test", entry)
     mock_client().table.assert_called_with("oauth_refresh_tokens")
+    # Verify datetime fields were serialized to ISO strings before being sent to Supabase
+    call_args = mock_client().table().upsert.call_args
+    payload = call_args[0][0]
+    assert isinstance(payload["expires_at"], str), "expires_at must be ISO string"
+    assert isinstance(payload["access_token_issued_at"], str), (
+        "access_token_issued_at must be ISO string"
+    )
 
 
 @patch("services.oauth_store._client")
-def test_load_refresh_tokens_returns_dict(mock_client):
+def test_load_refresh_tokens_returns_dict(mock_client) -> None:
     from services.oauth_store import load_refresh_tokens
 
     now = datetime.now(UTC)
@@ -63,7 +71,7 @@ def test_load_refresh_tokens_returns_dict(mock_client):
 
 
 @patch("services.oauth_store._client")
-def test_delete_refresh_token_on_consumption(mock_client):
+def test_delete_refresh_token_on_consumption(mock_client) -> None:
     """Consuming a refresh token (rotation) removes it from DB."""
     from services.oauth_store import delete_refresh_token
 
@@ -73,7 +81,7 @@ def test_delete_refresh_token_on_consumption(mock_client):
 
 
 @patch("services.oauth_store._client")
-def test_save_registered_client_calls_upsert(mock_client):
+def test_save_registered_client_calls_upsert(mock_client) -> None:
     from services.oauth_store import save_registered_client
 
     entry = {
@@ -91,7 +99,7 @@ def test_save_registered_client_calls_upsert(mock_client):
 
 
 @patch("services.oauth_store._client")
-def test_load_registered_clients_returns_dict(mock_client):
+def test_load_registered_clients_returns_dict(mock_client) -> None:
     from services.oauth_store import load_registered_clients
 
     mock_client().table().select().execute.return_value = MagicMock(
@@ -116,7 +124,7 @@ def test_load_registered_clients_returns_dict(mock_client):
 
 @patch("services.oauth_store.load_refresh_tokens")
 @patch("services.oauth_store.load_registered_clients")
-def test_startup_hydrates_state(mock_load_clients, mock_load_tokens):
+def test_startup_hydrates_state(mock_load_clients, mock_load_tokens) -> None:
     """Verify that hydration logic populates oauth_state dicts."""
     now = datetime.now(UTC)
     mock_load_tokens.return_value = {
@@ -152,7 +160,7 @@ def test_startup_hydrates_state(mock_load_clients, mock_load_tokens):
 
 
 @patch("services.oauth_store._client")
-def test_save_refresh_token_handles_db_failure(mock_client, caplog):
+def test_save_refresh_token_handles_db_failure(mock_client, caplog) -> None:
     """DB failure on save logs the error but doesn't raise."""
     from services.oauth_store import save_refresh_token
 
@@ -165,15 +173,27 @@ def test_save_refresh_token_handles_db_failure(mock_client, caplog):
         "expires_at": datetime.now(UTC) + timedelta(days=30),
         "access_token_issued_at": datetime.now(UTC),
     }
-    # Should not raise
-    save_refresh_token("rt-fail", entry)
+    with caplog.at_level(logging.ERROR, logger="services.oauth_store"):
+        # Should not raise
+        save_refresh_token("rt-fail", entry)
+    assert "failed to persist refresh token" in caplog.text
 
 
 @patch("services.oauth_store._client")
-def test_load_refresh_tokens_handles_db_failure(mock_client):
+def test_load_refresh_tokens_handles_db_failure(mock_client) -> None:
     """DB failure on load returns empty dict."""
     from services.oauth_store import load_refresh_tokens
 
     mock_client().table().select().gt().execute.side_effect = RuntimeError("DB down")
     result = load_refresh_tokens()
+    assert result == {}
+
+
+@patch("services.oauth_store._client")
+def test_load_registered_clients_handles_db_failure(mock_client) -> None:
+    """DB failure on load of registered clients returns empty dict."""
+    from services.oauth_store import load_registered_clients
+
+    mock_client().table().select().execute.side_effect = RuntimeError("DB down")
+    result = load_registered_clients()
     assert result == {}

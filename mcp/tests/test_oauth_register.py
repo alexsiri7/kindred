@@ -7,6 +7,7 @@ from collections.abc import AsyncIterator
 import httpx
 import pytest
 
+import oauth
 import oauth_state
 import settings as settings_module
 from main import app
@@ -76,3 +77,17 @@ async def test_register_supplies_defaults_for_omitted_fields(
     assert data["grant_types"] == ["authorization_code"]
     assert data["response_types"] == ["code"]
     assert data["scope"] == "mcp"
+
+
+async def test_register_persists_to_db(
+    client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """POST /oauth/register must call save_registered_client() with the new client_id."""
+    saved: list[str] = []
+    monkeypatch.setattr(oauth, "save_registered_client", lambda cid, e: saved.append(cid))
+    res = await client.post(
+        "/oauth/register",
+        json={"client_name": "x", "redirect_uris": ["https://example.com/cb"]},
+    )
+    assert res.status_code == 201
+    assert saved == [res.json()["client_id"]]
