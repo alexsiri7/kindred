@@ -51,7 +51,10 @@ mcp: FastMCP = FastMCP(
 # ---------------------------------------------------------------------------
 # OAuth 2.1 + discovery routes (registered as @mcp.custom_route())
 # ---------------------------------------------------------------------------
-from oauth import _proactive_refresh, register_routes as _register_oauth_routes  # noqa: E402,I001
+import oauth_state  # noqa: E402
+from oauth import _proactive_refresh  # noqa: E402,I001
+from oauth import register_routes as _register_oauth_routes  # noqa: E402
+from services.oauth_store import load_refresh_tokens, load_registered_clients  # noqa: E402
 
 _register_oauth_routes(mcp)
 
@@ -365,6 +368,9 @@ def build_app() -> ASGIApp:
     # parse-and-discard rather than building the limiter so the cached
     # instance still resolves lazily on first request.
     rate_limit._parse_per_tool_config(settings.mcp_rate_limit_per_tool)
+    # Hydrate in-memory state from DB before _proactive_refresh() runs (issue #125)
+    oauth_state.refresh_tokens.update(load_refresh_tokens())
+    oauth_state.registered_clients.update(load_registered_clients())
     _proactive_refresh()
     return with_user_context(with_rate_limit(mcp.streamable_http_app()))
 

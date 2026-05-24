@@ -42,6 +42,7 @@ from oauth_state import (
     refresh_tokens,
     registered_clients,
 )
+from services.oauth_store import delete_refresh_token, save_refresh_token, save_registered_client
 from settings import settings
 
 logger = logging.getLogger(__name__)
@@ -96,18 +97,16 @@ def _issue_token_response(
     now = datetime.now(UTC)
     access_token = _create_jwt(user_id, email)
     refresh_token = secrets.token_urlsafe(32)
-    cleanup_and_store(
-        refresh_tokens,
-        refresh_token,
-        {
-            "user_id": user_id,
-            "email": email,
-            "client_id": client_id,
-            "scope": scope,
-            "expires_at": now + timedelta(seconds=REFRESH_TOKEN_TTL_SECONDS),
-            "access_token_issued_at": now,
-        },
-    )
+    entry = {
+        "user_id": user_id,
+        "email": email,
+        "client_id": client_id,
+        "scope": scope,
+        "expires_at": now + timedelta(seconds=REFRESH_TOKEN_TTL_SECONDS),
+        "access_token_issued_at": now,
+    }
+    cleanup_and_store(refresh_tokens, refresh_token, entry)
+    save_refresh_token(refresh_token, entry)
     return JSONResponse(
         {
             "access_token": access_token,
@@ -333,6 +332,7 @@ def register_routes(mcp_obj: FastMCP) -> None:
             "scope": body.get("scope", "mcp"),
         }
         cleanup_and_store(registered_clients, client_id, client)
+        save_registered_client(client_id, client)
         logger.info(
             "MCP OAuth: registered client %s (%s)",
             client_id,
@@ -530,6 +530,7 @@ def register_routes(mcp_obj: FastMCP) -> None:
                 raise HTTPException(
                     status_code=400, detail="Invalid or expired refresh_token"
                 )
+            delete_refresh_token(refresh_token)
             return _issue_token_response(
                 session["user_id"],
                 session.get("email"),
