@@ -36,7 +36,9 @@ def _seed_session(
         "email": "test@example.com",
         "client_id": "client-1",
         "scope": "mcp",
-        "expires_at": now + timedelta(seconds=REFRESH_TOKEN_TTL_SECONDS - refresh_token_age_seconds),
+        "expires_at": now + timedelta(
+            seconds=REFRESH_TOKEN_TTL_SECONDS - refresh_token_age_seconds
+        ),
         "access_token_issued_at": now - timedelta(seconds=access_token_age_seconds),
     }
 
