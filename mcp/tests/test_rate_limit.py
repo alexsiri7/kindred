@@ -58,9 +58,7 @@ def test_window_resets(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_per_tool_independent() -> None:
-    limiter = RateLimiter(
-        global_per_min=1000, per_tool={"search_entries": 10}, disabled=False
-    )
+    limiter = RateLimiter(global_per_min=1000, per_tool={"search_entries": 10}, disabled=False)
     for _ in range(10):
         assert limiter.check(USER_A, "search_entries").allowed is True
     assert limiter.check(USER_A, "search_entries").allowed is False
@@ -70,9 +68,7 @@ def test_per_tool_independent() -> None:
 
 def test_per_tool_breach_does_not_consume_global() -> None:
     """Atomic-increment correctness: per-tool denial must not bump global count."""
-    limiter = RateLimiter(
-        global_per_min=2, per_tool={"search_entries": 1}, disabled=False
-    )
+    limiter = RateLimiter(global_per_min=2, per_tool={"search_entries": 1}, disabled=False)
     # Allowed: global=1, search=1.
     assert limiter.check(USER_A, "search_entries").allowed is True
     # Per-tool breach. With correct atomicity, global stays at 1; if broken,
@@ -102,9 +98,7 @@ def test_disabled_flag_no_ops() -> None:
 
 
 def test_global_zero_disables_global_only() -> None:
-    limiter = RateLimiter(
-        global_per_min=0, per_tool={"search_entries": 2}, disabled=False
-    )
+    limiter = RateLimiter(global_per_min=0, per_tool={"search_entries": 2}, disabled=False)
     # No global cap; many non-search calls all allowed.
     for _ in range(100):
         assert limiter.check(USER_A, "list_recent_entries").allowed is True

@@ -34,9 +34,17 @@ async def log_occurrence(
     user_id = current_user_id.get()
     return await _call(
         patterns_service.log_occurrence,
-        user_id, None, pattern_name, entry_id,
-        thoughts, emotions, behaviors, sensations,
-        intensity, trigger, notes,
+        user_id,
+        None,
+        pattern_name,
+        entry_id,
+        thoughts,
+        emotions,
+        behaviors,
+        sensations,
+        intensity,
+        trigger,
+        notes,
     )
 
 

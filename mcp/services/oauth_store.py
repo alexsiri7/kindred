@@ -53,15 +53,17 @@ def save_refresh_token(token: str, entry: dict[str, Any]) -> None:
     if isinstance(issued_at, datetime):
         issued_at = issued_at.isoformat()
     try:
-        _client().table("oauth_refresh_tokens").upsert({
-            "token": token,
-            "user_id": entry["user_id"],
-            "email": entry.get("email"),
-            "client_id": entry["client_id"],
-            "scope": entry.get("scope", "mcp"),
-            "expires_at": expires_at,
-            "access_token_issued_at": issued_at,
-        }).execute()
+        _client().table("oauth_refresh_tokens").upsert(
+            {
+                "token": token,
+                "user_id": entry["user_id"],
+                "email": entry.get("email"),
+                "client_id": entry["client_id"],
+                "scope": entry.get("scope", "mcp"),
+                "expires_at": expires_at,
+                "access_token_issued_at": issued_at,
+            }
+        ).execute()
     except Exception:
         logger.exception(
             "oauth_store: failed to persist refresh token for user %s", entry.get("user_id")
@@ -80,13 +82,7 @@ def load_refresh_tokens() -> dict[str, dict[str, Any]]:
     """Load all non-expired refresh tokens from DB. Called at startup."""
     try:
         now = datetime.now(UTC).isoformat()
-        res = (
-            _client()
-            .table("oauth_refresh_tokens")
-            .select("*")
-            .gt("expires_at", now)
-            .execute()
-        )
+        res = _client().table("oauth_refresh_tokens").select("*").gt("expires_at", now).execute()
         rows = cast(list[dict[str, Any]], res.data or [])
         result: dict[str, dict[str, Any]] = {}
         for row in rows:
@@ -115,18 +111,20 @@ def load_refresh_tokens() -> dict[str, dict[str, Any]]:
 def save_registered_client(client_id: str, entry: dict[str, Any]) -> None:
     """Upsert a registered client record. Called on /oauth/register."""
     try:
-        _client().table("oauth_registered_clients").upsert({
-            "client_id": client_id,
-            "client_secret": entry["client_secret"],
-            "redirect_uris": entry.get("redirect_uris", []),
-            "client_name": entry.get("client_name", ""),
-            "grant_types": entry.get("grant_types", ["authorization_code"]),
-            "response_types": entry.get("response_types", ["code"]),
-            "token_endpoint_auth_method": entry.get(
-                "token_endpoint_auth_method", "client_secret_post"
-            ),
-            "scope": entry.get("scope", "mcp"),
-        }).execute()
+        _client().table("oauth_registered_clients").upsert(
+            {
+                "client_id": client_id,
+                "client_secret": entry["client_secret"],
+                "redirect_uris": entry.get("redirect_uris", []),
+                "client_name": entry.get("client_name", ""),
+                "grant_types": entry.get("grant_types", ["authorization_code"]),
+                "response_types": entry.get("response_types", ["code"]),
+                "token_endpoint_auth_method": entry.get(
+                    "token_endpoint_auth_method", "client_secret_post"
+                ),
+                "scope": entry.get("scope", "mcp"),
+            }
+        ).execute()
     except Exception:
         logger.exception("oauth_store: failed to persist registered client %s", client_id)
 

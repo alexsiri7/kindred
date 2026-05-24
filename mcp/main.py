@@ -69,8 +69,7 @@ mcp.tool(
     description=(
         "Call at the end of a session. Always confirm the summary with the user "
         "before saving. Ask the user for a single mood word and the full conversation "
-        "transcript before calling."
-        + GUIDE_NUDGE
+        "transcript before calling." + GUIDE_NUDGE
     ),
 )(audited("save_entry")(entry_tools.save_entry))
 
@@ -82,8 +81,7 @@ mcp.tool(
 mcp.tool(
     description=(
         "Only call when the user asks about past entries. Do not surface past "
-        "entries unprompted."
-        + GUIDE_NUDGE
+        "entries unprompted." + GUIDE_NUDGE
     ),
     annotations=ToolAnnotations(readOnlyHint=True),
 )(audited("list_recent_entries")(entry_tools.list_recent_entries))
@@ -91,8 +89,7 @@ mcp.tool(
 mcp.tool(
     description=(
         "Only call when the user asks about past entries. Do not surface past "
-        "entries unprompted."
-        + GUIDE_NUDGE
+        "entries unprompted." + GUIDE_NUDGE
     ),
     annotations=ToolAnnotations(readOnlyHint=True),
 )(audited("search_entries")(entry_tools.search_entries))
@@ -100,8 +97,7 @@ mcp.tool(
 mcp.tool(
     description=(
         "Call after HCB analysis to check whether the examined moment matches a "
-        "recurring experience pattern before creating a new one."
-        + GUIDE_NUDGE
+        "recurring experience pattern before creating a new one." + GUIDE_NUDGE
     ),
     annotations=ToolAnnotations(readOnlyHint=True),
 )(audited("list_patterns")(pattern_tools.list_patterns))
@@ -115,8 +111,7 @@ mcp.tool(
     description=(
         "Call after completing HCB analysis with the user to record the occurrence "
         "against a named pattern. Call list_patterns first to find an existing match "
-        "before creating a new one. Never initiate HCB unprompted."
-        + GUIDE_NUDGE
+        "before creating a new one. Never initiate HCB unprompted." + GUIDE_NUDGE
     ),
 )(audited("log_occurrence")(pattern_tools.log_occurrence))
 
@@ -296,9 +291,7 @@ def with_rate_limit(app: ASGIApp, limiter: RateLimiter | None = None) -> ASGIApp
             try:
                 parsed = json.loads(body_bytes)
             except json.JSONDecodeError:
-                logger.debug(
-                    "rate_limit: body parse failed; per-tool cap will not apply"
-                )
+                logger.debug("rate_limit: body parse failed; per-tool cap will not apply")
                 parsed = None
             if isinstance(parsed, dict) and parsed.get("method") == "tools/call":
                 params = parsed.get("params")

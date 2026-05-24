@@ -39,9 +39,8 @@ def _seed_session(
         "email": "test@example.com",
         "client_id": "client-1",
         "scope": "mcp",
-        "expires_at": now + timedelta(
-            seconds=REFRESH_TOKEN_TTL_SECONDS - refresh_token_age_seconds
-        ),
+        "expires_at": now
+        + timedelta(seconds=REFRESH_TOKEN_TTL_SECONDS - refresh_token_age_seconds),
         "access_token_issued_at": now - timedelta(seconds=access_token_age_seconds),
     }
 
@@ -74,8 +73,10 @@ def test_expired_access_token_updates_issued_at() -> None:
     entry = oauth_state.refresh_tokens["rt-abc"]
     # Flagged: issued_at is reset to (now - JWT_EXPIRY_SECONDS) so next grant mints fresh
     reset_at = entry["access_token_issued_at"]
-    assert (before - timedelta(seconds=JWT_EXPIRY_SECONDS)) <= reset_at <= (
-        after - timedelta(seconds=JWT_EXPIRY_SECONDS)
+    assert (
+        (before - timedelta(seconds=JWT_EXPIRY_SECONDS))
+        <= reset_at
+        <= (after - timedelta(seconds=JWT_EXPIRY_SECONDS))
     )
 
 
@@ -90,8 +91,10 @@ def test_near_expiry_access_token_is_refreshed() -> None:
     entry = oauth_state.refresh_tokens["rt-abc"]
     # Flagged: issued_at is reset to (now - JWT_EXPIRY_SECONDS) so next grant mints fresh
     reset_at = entry["access_token_issued_at"]
-    assert (before - timedelta(seconds=JWT_EXPIRY_SECONDS)) <= reset_at <= (
-        after - timedelta(seconds=JWT_EXPIRY_SECONDS)
+    assert (
+        (before - timedelta(seconds=JWT_EXPIRY_SECONDS))
+        <= reset_at
+        <= (after - timedelta(seconds=JWT_EXPIRY_SECONDS))
     )
 
 

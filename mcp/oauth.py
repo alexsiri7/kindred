@@ -165,11 +165,7 @@ def _proactive_refresh() -> None:
 
             # --- expired refresh token: drop it ---
             refresh_exp = entry.get("expires_at")
-            if (
-                refresh_exp is not None
-                and isinstance(refresh_exp, datetime)
-                and now > refresh_exp
-            ):
+            if refresh_exp is not None and isinstance(refresh_exp, datetime) and now > refresh_exp:
                 refresh_tokens.pop(token_key, None)
                 logger.warning(
                     "proactive_refresh: refresh token for user %s expired at %s — "
@@ -242,9 +238,7 @@ async def _verify_supabase_token(access_token: str) -> dict[str, Any] | None:
                 },
             )
         if resp.status_code != 200:
-            logger.warning(
-                "MCP OAuth: Supabase /auth/v1/user returned %s", resp.status_code
-            )
+            logger.warning("MCP OAuth: Supabase /auth/v1/user returned %s", resp.status_code)
             return None
         payload = resp.json()
     except httpx.HTTPError as exc:
@@ -370,9 +364,7 @@ def register_routes(mcp_obj: FastMCP) -> None:
         response_type = qp.get("response_type", "code")
 
         if response_type != "code":
-            raise HTTPException(
-                status_code=400, detail="Only response_type=code is supported"
-            )
+            raise HTTPException(status_code=400, detail="Only response_type=code is supported")
         if code_challenge_method != "S256":
             raise HTTPException(
                 status_code=400,
@@ -406,8 +398,7 @@ def register_routes(mcp_obj: FastMCP) -> None:
                 "code_challenge_method": code_challenge_method,
                 "client_id": client_id,
                 "scope": scope,
-                "expires_at": datetime.now(UTC)
-                + timedelta(seconds=SESSION_TTL_SECONDS),
+                "expires_at": datetime.now(UTC) + timedelta(seconds=SESSION_TTL_SECONDS),
             },
         )
         logger.info(
@@ -494,8 +485,7 @@ def register_routes(mcp_obj: FastMCP) -> None:
                 "redirect_uri": session["redirect_uri"],
                 "scope": session.get("scope", "mcp"),
                 "client_id": session["client_id"],
-                "expires_at": datetime.now(UTC)
-                + timedelta(seconds=AUTH_CODE_TTL_SECONDS),
+                "expires_at": datetime.now(UTC) + timedelta(seconds=AUTH_CODE_TTL_SECONDS),
             },
         )
 
@@ -522,14 +512,10 @@ def register_routes(mcp_obj: FastMCP) -> None:
         if grant_type == "refresh_token":
             refresh_token = str(form.get("refresh_token", ""))
             if not refresh_token:
-                raise HTTPException(
-                    status_code=400, detail="refresh_token is required"
-                )
+                raise HTTPException(status_code=400, detail="refresh_token is required")
             session = cleanup_and_pop(refresh_tokens, refresh_token)
             if not session:
-                raise HTTPException(
-                    status_code=400, detail="Invalid or expired refresh_token"
-                )
+                raise HTTPException(status_code=400, detail="Invalid or expired refresh_token")
             delete_refresh_token(refresh_token)
             return _issue_token_response(
                 session["user_id"],
@@ -548,17 +534,13 @@ def register_routes(mcp_obj: FastMCP) -> None:
 
         session = cleanup_and_pop(auth_codes, code)
         if not session:
-            raise HTTPException(
-                status_code=400, detail="Invalid or expired authorization code"
-            )
+            raise HTTPException(status_code=400, detail="Invalid or expired authorization code")
         if redirect_uri != session["redirect_uri"]:
             raise HTTPException(status_code=400, detail="redirect_uri mismatch")
 
         if session.get("code_challenge_method") == "S256":
             if not code_verifier:
-                raise HTTPException(
-                    status_code=400, detail="code_verifier is required"
-                )
+                raise HTTPException(status_code=400, detail="code_verifier is required")
             if _pkce_s256(code_verifier) != session["code_challenge"]:
                 raise HTTPException(status_code=400, detail="PKCE verification failed")
 

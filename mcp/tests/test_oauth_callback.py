@@ -20,16 +20,12 @@ USER_ID = "11111111-2222-3333-4444-555555555555"
 
 @pytest.fixture(autouse=True)
 def _settings(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        settings_module.settings, "mcp_base_url", "https://test.example.com"
-    )
+    monkeypatch.setattr(settings_module.settings, "mcp_base_url", "https://test.example.com")
     monkeypatch.setattr(
         settings_module.settings, "supabase_url", "https://supabase.test.example.com"
     )
     monkeypatch.setattr(settings_module.settings, "supabase_anon_key", "test-anon-key")
-    monkeypatch.setattr(
-        settings_module.settings, "supabase_jwt_secret", SUPABASE_JWT_SECRET
-    )
+    monkeypatch.setattr(settings_module.settings, "supabase_jwt_secret", SUPABASE_JWT_SECRET)
     monkeypatch.setattr(
         settings_module.settings,
         "secret_key",

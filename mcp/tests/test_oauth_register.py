@@ -14,9 +14,7 @@ from main import app
 
 @pytest.fixture(autouse=True)
 def _set_base_url(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        settings_module.settings, "mcp_base_url", "https://test.example.com"
-    )
+    monkeypatch.setattr(settings_module.settings, "mcp_base_url", "https://test.example.com")
 
 
 @pytest.fixture(autouse=True)
@@ -58,9 +56,7 @@ async def test_register_persists_in_state_store(client: httpx.AsyncClient) -> No
     assert res.status_code == 201
     cid = res.json()["client_id"]
     assert cid in oauth_state.registered_clients
-    assert oauth_state.registered_clients[cid]["redirect_uris"] == [
-        "https://example.com/cb"
-    ]
+    assert oauth_state.registered_clients[cid]["redirect_uris"] == ["https://example.com/cb"]
 
 
 async def test_register_assigns_distinct_client_ids(client: httpx.AsyncClient) -> None:
