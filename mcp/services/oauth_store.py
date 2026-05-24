@@ -6,38 +6,26 @@ Wraps the two long-lived in-memory dicts in oauth_state:
   - registered_clients (no TTL): written on /oauth/register, never deleted,
     loaded at startup.
 
-Uses the Supabase service-role client (SUPABASE_SERVICE_ROLE_KEY) because tokens
-are server-managed — they don't belong to any individual user row.
+Uses security-definer RPC functions (005_oauth_token_rpcs.sql) callable via
+the anon key — no service-role key required in request-handling code (#44).
 All reads/writes are synchronous blocking calls (called from async FastAPI handlers).
 """
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import UTC, datetime
 from typing import Any, cast
 
-from lib.settings import settings as lib_settings
-from supabase import Client, create_client
+from lib.db import anon_client
+from supabase import Client
 
 logger = logging.getLogger(__name__)
 
-_service_client: Client | None = None
-
 
 def _client() -> Client:
-    global _service_client
-    if _service_client is None:
-        from settings import settings as mcp_settings  # noqa: PLC0415
-
-        client = create_client(
-            lib_settings.supabase_url,
-            lib_settings.supabase_anon_key,
-        )
-        # Use service-role key to bypass RLS for server-internal tables
-        client.postgrest.auth(mcp_settings.supabase_service_role_key)
-        _service_client = client  # assign only after full init
-    return _service_client
+    return anon_client()
 
 
 # ---------------------------------------------------------------------------
@@ -54,16 +42,17 @@ def save_refresh_token(token: str, entry: dict[str, Any]) -> None:
     if isinstance(issued_at, datetime):
         issued_at = issued_at.isoformat()
     try:
-        _client().table("oauth_refresh_tokens").upsert(
+        _client().rpc(
+            "upsert_oauth_refresh_token",
             {
-                "token": token,
-                "user_id": entry["user_id"],
-                "email": entry.get("email"),
-                "client_id": entry["client_id"],
-                "scope": entry.get("scope", "mcp"),
-                "expires_at": expires_at,
-                "access_token_issued_at": issued_at,
-            }
+                "p_token": token,
+                "p_user_id": entry["user_id"],
+                "p_email": entry.get("email"),
+                "p_client_id": entry["client_id"],
+                "p_scope": entry.get("scope", "mcp"),
+                "p_expires_at": expires_at,
+                "p_access_token_issued_at": issued_at,
+            },
         ).execute()
     except Exception:
         logger.exception(
@@ -79,7 +68,7 @@ def delete_refresh_token(token: str) -> None:
     until a manual or scheduled cleanup runs.
     """
     try:
-        _client().table("oauth_refresh_tokens").delete().eq("token", token).execute()
+        _client().rpc("delete_oauth_refresh_token", {"p_token": token}).execute()
     except Exception:
         logger.exception(
             "oauth_store: failed to delete refresh token %s — "
@@ -91,8 +80,7 @@ def delete_refresh_token(token: str) -> None:
 def load_refresh_tokens() -> dict[str, dict[str, Any]]:
     """Load all non-expired refresh tokens from DB. Called at startup."""
     try:
-        now = datetime.now(UTC).isoformat()
-        res = _client().table("oauth_refresh_tokens").select("*").gt("expires_at", now).execute()
+        res = _client().rpc("load_oauth_refresh_tokens", {}).execute()
         rows = cast(list[dict[str, Any]], res.data or [])
         result: dict[str, dict[str, Any]] = {}
         for row in rows:
@@ -120,20 +108,24 @@ def load_refresh_tokens() -> dict[str, dict[str, Any]]:
 
 def save_registered_client(client_id: str, entry: dict[str, Any]) -> None:
     """Upsert a registered client record. Called on /oauth/register."""
+    redirect_uris = entry.get("redirect_uris", [])
+    grant_types = entry.get("grant_types", ["authorization_code"])
+    response_types = entry.get("response_types", ["code"])
     try:
-        _client().table("oauth_registered_clients").upsert(
+        _client().rpc(
+            "upsert_oauth_registered_client",
             {
-                "client_id": client_id,
-                "client_secret": entry["client_secret"],
-                "redirect_uris": entry.get("redirect_uris", []),
-                "client_name": entry.get("client_name", ""),
-                "grant_types": entry.get("grant_types", ["authorization_code"]),
-                "response_types": entry.get("response_types", ["code"]),
-                "token_endpoint_auth_method": entry.get(
+                "p_client_id": client_id,
+                "p_client_secret": entry["client_secret"],
+                "p_redirect_uris": json.dumps(redirect_uris),
+                "p_client_name": entry.get("client_name", ""),
+                "p_grant_types": json.dumps(grant_types),
+                "p_response_types": json.dumps(response_types),
+                "p_token_endpoint_auth_method": entry.get(
                     "token_endpoint_auth_method", "client_secret_post"
                 ),
-                "scope": entry.get("scope", "mcp"),
-            }
+                "p_scope": entry.get("scope", "mcp"),
+            },
         ).execute()
     except Exception:
         logger.exception("oauth_store: failed to persist registered client %s", client_id)
@@ -142,7 +134,7 @@ def save_registered_client(client_id: str, entry: dict[str, Any]) -> None:
 def load_registered_clients() -> dict[str, dict[str, Any]]:
     """Load all registered clients from DB. Called at startup."""
     try:
-        res = _client().table("oauth_registered_clients").select("*").execute()
+        res = _client().rpc("load_oauth_registered_clients", {}).execute()
         rows = cast(list[dict[str, Any]], res.data or [])
         result: dict[str, dict[str, Any]] = {}
         for row in rows:

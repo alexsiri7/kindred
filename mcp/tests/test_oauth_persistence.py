@@ -34,13 +34,16 @@ def test_save_refresh_token_calls_upsert(mock_client) -> None:
         "access_token_issued_at": datetime.now(UTC),
     }
     save_refresh_token("rt-test", entry)
-    mock_client().table.assert_called_with("oauth_refresh_tokens")
-    # Verify datetime fields were serialized to ISO strings before being sent to Supabase
-    call_args = mock_client().table().upsert.call_args
-    payload = call_args[0][0]
-    assert isinstance(payload["expires_at"], str), "expires_at must be ISO string"
-    assert isinstance(payload["access_token_issued_at"], str), (
-        "access_token_issued_at must be ISO string"
+    mock_client().rpc.assert_called_once()
+    call_args = mock_client().rpc.call_args
+    assert call_args[0][0] == "upsert_oauth_refresh_token"
+    params = call_args[0][1]
+    assert params["p_token"] == "rt-test"
+    assert params["p_user_id"] == "u1"
+    # Datetime fields must be serialized to ISO strings before being sent to Supabase
+    assert isinstance(params["p_expires_at"], str), "p_expires_at must be ISO string"
+    assert isinstance(params["p_access_token_issued_at"], str), (
+        "p_access_token_issued_at must be ISO string"
     )
 
 
@@ -49,7 +52,7 @@ def test_load_refresh_tokens_returns_dict(mock_client) -> None:
     from services.oauth_store import load_refresh_tokens
 
     now = datetime.now(UTC)
-    mock_client().table().select().gt().execute.return_value = MagicMock(
+    mock_client().rpc().execute.return_value = MagicMock(
         data=[
             {
                 "token": "rt-loaded",
@@ -76,8 +79,10 @@ def test_delete_refresh_token_on_consumption(mock_client) -> None:
     from services.oauth_store import delete_refresh_token
 
     delete_refresh_token("rt-old")
-    mock_client().table.assert_called_with("oauth_refresh_tokens")
-    mock_client().table().delete().eq.assert_called_with("token", "rt-old")
+    mock_client().rpc.assert_called_once()
+    call_args = mock_client().rpc.call_args
+    assert call_args[0][0] == "delete_oauth_refresh_token"
+    assert call_args[0][1]["p_token"] == "rt-old"
 
 
 @patch("services.oauth_store._client")
@@ -95,14 +100,17 @@ def test_save_registered_client_calls_upsert(mock_client) -> None:
         "scope": "mcp",
     }
     save_registered_client("c1", entry)
-    mock_client().table.assert_called_with("oauth_registered_clients")
+    mock_client().rpc.assert_called_once()
+    call_args = mock_client().rpc.call_args
+    assert call_args[0][0] == "upsert_oauth_registered_client"
+    assert call_args[0][1]["p_client_id"] == "c1"
 
 
 @patch("services.oauth_store._client")
 def test_load_registered_clients_returns_dict(mock_client) -> None:
     from services.oauth_store import load_registered_clients
 
-    mock_client().table().select().execute.return_value = MagicMock(
+    mock_client().rpc().execute.return_value = MagicMock(
         data=[
             {
                 "client_id": "c-loaded",
@@ -164,7 +172,7 @@ def test_save_refresh_token_handles_db_failure(mock_client, caplog) -> None:
     """DB failure on save logs the error but doesn't raise."""
     from services.oauth_store import save_refresh_token
 
-    mock_client().table().upsert().execute.side_effect = RuntimeError("DB down")
+    mock_client().rpc().execute.side_effect = RuntimeError("DB down")
     entry = {
         "user_id": "u1",
         "email": None,
@@ -184,7 +192,7 @@ def test_load_refresh_tokens_handles_db_failure(mock_client) -> None:
     """DB failure on load returns empty dict."""
     from services.oauth_store import load_refresh_tokens
 
-    mock_client().table().select().gt().execute.side_effect = RuntimeError("DB down")
+    mock_client().rpc().execute.side_effect = RuntimeError("DB down")
     result = load_refresh_tokens()
     assert result == {}
 
@@ -194,6 +202,6 @@ def test_load_registered_clients_handles_db_failure(mock_client) -> None:
     """DB failure on load of registered clients returns empty dict."""
     from services.oauth_store import load_registered_clients
 
-    mock_client().table().select().execute.side_effect = RuntimeError("DB down")
+    mock_client().rpc().execute.side_effect = RuntimeError("DB down")
     result = load_registered_clients()
     assert result == {}

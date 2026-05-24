@@ -4,7 +4,6 @@ from lib.settings import CoreSettings
 class Settings(CoreSettings):
     mcp_base_url: str = ""
     secret_key: str = ""
-    supabase_service_role_key: str = ""
 
     mcp_host: str = "0.0.0.0"
     mcp_port: int = 8000
