@@ -67,6 +67,73 @@ def test_get_entry_by_date_or_id_requires_exactly_one_arg(
         )
 
 
+def test_update_entry_patches_summary_and_reembeds(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[str] = []
+
+    def fake_update_entry(
+        user_id: str, jwt_token: str | None, entry_id: str, patch: dict[str, Any]
+    ) -> dict[str, Any]:
+        assert user_id == USER_ID
+        assert entry_id == ENTRY_ID
+        assert patch == {"summary": "new summary"}
+        calls.append("update_entry")
+        return {"id": ENTRY_ID, "summary": "new summary"}
+
+    def fake_embed(text: str) -> list[float]:
+        assert text == "new summary"
+        calls.append("embed")
+        return [0.1, 0.2, 0.3]
+
+    def fake_update_embedding(
+        user_id: str,
+        jwt_token: str | None,
+        entry_id: str,
+        embedding: list[float],
+        content: str,
+    ) -> None:
+        assert user_id == USER_ID
+        assert entry_id == ENTRY_ID
+        assert embedding == [0.1, 0.2, 0.3]
+        assert content == "new summary"
+        calls.append("update_embedding")
+
+    monkeypatch.setattr(db, "update_entry", fake_update_entry)
+    monkeypatch.setattr(embeddings, "embed", fake_embed)
+    monkeypatch.setattr(db, "update_embedding", fake_update_embedding)
+
+    result = entries_service.update_entry(USER_ID, None, entry_id=ENTRY_ID, summary="new summary")
+    assert result["id"] == ENTRY_ID
+    assert calls == ["update_entry", "embed", "update_embedding"]
+
+
+def test_update_entry_mood_only_no_reembed(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[str] = []
+
+    def fake_update_entry(
+        user_id: str, jwt_token: str | None, entry_id: str, patch: dict[str, Any]
+    ) -> dict[str, Any]:
+        assert patch == {"mood": "calm"}
+        calls.append("update_entry")
+        return {"id": ENTRY_ID, "mood": "calm"}
+
+    monkeypatch.setattr(db, "update_entry", fake_update_entry)
+
+    result = entries_service.update_entry(USER_ID, None, entry_id=ENTRY_ID, mood="calm")
+    assert result["id"] == ENTRY_ID
+    assert calls == ["update_entry"]
+
+
+def test_update_entry_raises_on_empty_patch() -> None:
+    with pytest.raises(ValueError, match="at least one field"):
+        entries_service.update_entry(USER_ID, None, entry_id=ENTRY_ID)
+
+
+def test_update_entry_raises_when_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(db, "update_entry", lambda *a, **k: None)
+    with pytest.raises(LookupError):
+        entries_service.update_entry(USER_ID, None, entry_id=ENTRY_ID, mood="sad")
+
+
 def test_get_entry_with_occurrences_raises_when_missing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

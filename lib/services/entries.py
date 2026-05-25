@@ -80,6 +80,43 @@ def search_entries(
     return db.match_entries(user_id, jwt_token, vector, limit)
 
 
+def update_entry(
+    user_id: str,
+    jwt_token: str | None,
+    *,
+    date: str | None = None,
+    entry_id: str | None = None,
+    summary: str | None = None,
+    mood: str | None = None,
+    transcript: list[dict[str, str]] | None = None,
+) -> dict[str, Any]:
+    """Partially update an existing entry, re-embedding if summary changes."""
+    if (date is None) == (entry_id is None):
+        raise ValueError("provide exactly one of `date` or `entry_id`")
+    if entry_id is None:
+        assert date is not None
+        row = db.get_entry_by_date(user_id, jwt_token, date)
+        if row is None:
+            raise LookupError("entry not found")
+        entry_id = str(row["id"])
+    patch: dict[str, Any] = {}
+    if summary is not None:
+        patch["summary"] = summary
+    if mood is not None:
+        patch["mood"] = mood
+    if transcript is not None:
+        patch["transcript"] = transcript
+    if not patch:
+        raise ValueError("at least one field must be supplied")
+    updated = db.update_entry(user_id, jwt_token, entry_id, patch)
+    if updated is None:
+        raise LookupError("entry not found")
+    if summary is not None:
+        vector = embeddings.embed(summary)
+        db.update_embedding(user_id, jwt_token, entry_id, vector, summary)
+    return updated
+
+
 def delete_entry(user_id: str, jwt_token: str | None, entry_id: str) -> None:
     if db.get_entry_by_id(user_id, jwt_token, entry_id) is None:
         raise LookupError("entry not found")

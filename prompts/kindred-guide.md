@@ -162,6 +162,10 @@ When the user signals they are done:
 4. Acknowledge that the entry is saved. Close gently. Do not moralise,
    advise, or assign homework.
 
+If the user asks to change something after the entry has been saved — a different
+mood word, a correction to the summary — prefer `update_entry` over calling
+`save_entry` again. Re-saving creates a duplicate entry for the same day.
+
 ## Tools
 
 - `read_guide` — fetch this guide. Call once at the start of every session if
@@ -176,4 +180,7 @@ When the user signals they are done:
 - `get_pattern` — fetch a single named pattern with its typical quadrants.
 - `log_occurrence` — call after HCB analysis to record the occurrence against
   a named pattern (existing or new).
+- `update_entry` — amend or correct a saved entry after the session has closed.
+  Supply `id` or `date` to locate the entry and any subset of `summary`, `mood`,
+  or `transcript`. Only the supplied fields are overwritten.
 - `list_occurrences` — list occurrences of a named pattern over time.
