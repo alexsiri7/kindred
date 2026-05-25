@@ -172,6 +172,7 @@ save_entry(date: date, summary: text, mood: text?, transcript: jsonb?) -> entry_
 get_entry(date: date | id: uuid) -> entry
 list_recent_entries(limit: int = 10) -> [entry_summary]
 search_entries(query: text, limit: int = 5) -> [entry_match]   # semantic, via pgvector
+update_entry(id: uuid?, date: date?, summary: text?, mood: text?, transcript: jsonb?) -> entry_id
 
 list_patterns(active_since: date?) -> [pattern]
 get_pattern(name_or_id: text) -> pattern
@@ -192,6 +193,8 @@ list_occurrences(pattern_name_or_id: text, since: date?) -> [occurrence]
 `log_occurrence` is the smart one: if `pattern_name` doesn't match an existing pattern (case-insensitive), it creates a new pattern using the occurrence's quadrants as the initial "typical" shape. This means the user can say "let's log this as the Sunday dread one" and it works whether or not Sunday dread exists yet.
 
 `save_entry` also computes and stores the embedding for the summary as a side effect.
+
+`update_entry` patches only the supplied fields; omitted fields are unchanged. When `summary` is supplied, the embedding is recomputed as a side effect. Requires `id` or `date` to locate the entry.
 
 ### Prompts (user-invoked slash commands)
 

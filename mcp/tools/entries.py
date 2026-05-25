@@ -41,6 +41,26 @@ async def list_recent_entries(limit: int = 10) -> list[dict[str, Any]]:
     return await _call(entries_service.list_recent_entries, user_id, None, limit)
 
 
+async def update_entry(
+    id: str | None = None,
+    date: str | None = None,
+    summary: str | None = None,
+    mood: str | None = None,
+    transcript: list[dict[str, str]] | None = None,
+) -> dict[str, Any]:
+    user_id = current_user_id.get()
+    return await _call(
+        entries_service.update_entry,
+        user_id,
+        None,
+        date=date,
+        entry_id=id,
+        summary=summary,
+        mood=mood,
+        transcript=transcript,
+    )
+
+
 async def search_entries(query: str, limit: int = 5) -> list[dict[str, Any]]:
     user_id = current_user_id.get()
     return await _call(entries_service.search_entries, user_id, None, query, limit)

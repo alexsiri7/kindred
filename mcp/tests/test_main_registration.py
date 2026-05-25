@@ -16,7 +16,7 @@ READ_ONLY_TOOLS = {
     "read_guide",
 }
 
-WRITE_TOOLS = {"save_entry", "log_occurrence"}
+WRITE_TOOLS = {"save_entry", "update_entry", "log_occurrence"}
 
 TOOL_HINTS = {
     "save_entry": "confirm the summary",

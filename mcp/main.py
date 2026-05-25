@@ -80,6 +80,15 @@ mcp.tool(
 
 mcp.tool(
     description=(
+        "Amend or correct a saved entry. Supply id or date to locate the entry, "
+        "then any subset of summary, mood, or transcript. Only supplied fields are "
+        "overwritten. If summary is updated the embedding is refreshed automatically."
+        + GUIDE_NUDGE
+    ),
+)(audited("update_entry")(entry_tools.update_entry))
+
+mcp.tool(
+    description=(
         "Only call when the user asks about past entries. Do not surface past "
         "entries unprompted." + GUIDE_NUDGE
     ),

@@ -150,6 +150,23 @@ def list_recent_entries(
     return list(res.data or [])
 
 
+def update_entry(
+    user_id: str,
+    jwt_token: str | None,
+    entry_id: str,
+    patch: dict[str, Any],
+) -> dict[str, Any] | None:
+    res = (
+        _table(user_id, jwt_token, "entries")
+        .update(patch)
+        .eq("user_id", user_id)
+        .eq("id", entry_id)
+        .execute()
+    )
+    rows = res.data or []
+    return rows[0] if rows else None
+
+
 def delete_entry(user_id: str, jwt_token: str | None, entry_id: str) -> None:
     (
         _table(user_id, jwt_token, "entry_embeddings")
@@ -185,6 +202,24 @@ def insert_embedding(
             "content": content,
         }
     ).execute()
+
+
+def update_embedding(
+    user_id: str,
+    jwt_token: str | None,
+    entry_id: str,
+    embedding: list[float],
+    content: str,
+) -> None:
+    res = (
+        _table(user_id, jwt_token, "entry_embeddings")
+        .update({"embedding": embedding, "content": content})
+        .eq("user_id", user_id)
+        .eq("entry_id", entry_id)
+        .execute()
+    )
+    if not res.data:
+        raise RuntimeError(f"update_embedding matched no row for entry_id={entry_id!r}")
 
 
 def match_entries(
@@ -412,6 +447,8 @@ __all__ = [
     "list_patterns",
     "list_recent_entries",
     "match_entries",
+    "update_embedding",
+    "update_entry",
     "update_pattern_seen",
     "update_user_metadata",
     "user_client",

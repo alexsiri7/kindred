@@ -1,4 +1,4 @@
-"""Entry business logic: save, get, list, search.
+"""Entry business logic: save, get, list, search, update, delete.
 
 Async/sync convention: these are sync. supabase-py 2.x is sync; the MCP
 side wraps calls in ``asyncio.to_thread`` (see mcp/tools/entries.py); the
@@ -78,6 +78,53 @@ def search_entries(
         raise ValueError("query must not be empty")
     vector = embeddings.embed(query)
     return db.match_entries(user_id, jwt_token, vector, limit)
+
+
+def update_entry(
+    user_id: str,
+    jwt_token: str | None,
+    *,
+    date: str | None = None,
+    entry_id: str | None = None,
+    summary: str | None = None,
+    mood: str | None = None,
+    transcript: list[dict[str, str]] | None = None,
+) -> dict[str, Any]:
+    """Partially update an existing entry, re-embedding if summary changes.
+
+    Note: entry row and embedding are updated in two separate DB calls (no
+    cross-table transaction available via PostgREST). The embedding is
+    pre-computed before any DB write so that a failed embedding API call
+    leaves the DB unchanged.
+    """
+    if (date is None) == (entry_id is None):
+        raise ValueError("provide exactly one of `date` or `entry_id`")
+    if entry_id is None:
+        assert date is not None
+        row = db.get_entry_by_date(user_id, jwt_token, date)
+        if row is None:
+            raise LookupError("entry not found")
+        entry_id = str(row["id"])
+    patch: dict[str, Any] = {}
+    if summary is not None:
+        patch["summary"] = summary
+    if mood is not None:
+        patch["mood"] = mood
+    if transcript is not None:
+        patch["transcript"] = transcript
+    if not patch:
+        raise ValueError("at least one field must be supplied")
+    # Pre-compute embedding BEFORE writing to DB so a network failure
+    # doesn't leave entry/embedding in diverged state.
+    vector: list[float] | None = None
+    if summary is not None:
+        vector = embeddings.embed(summary)
+    updated = db.update_entry(user_id, jwt_token, entry_id, patch)
+    if updated is None:
+        raise LookupError("entry not found")
+    if vector is not None:
+        db.update_embedding(user_id, jwt_token, entry_id, vector, summary)  # type: ignore[arg-type]
+    return updated
 
 
 def delete_entry(user_id: str, jwt_token: str | None, entry_id: str) -> None:
