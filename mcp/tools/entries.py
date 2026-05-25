@@ -50,8 +50,14 @@ async def update_entry(
 ) -> dict[str, Any]:
     user_id = current_user_id.get()
     return await _call(
-        entries_service.update_entry, user_id, None,
-        date=date, entry_id=id, summary=summary, mood=mood, transcript=transcript,
+        entries_service.update_entry,
+        user_id,
+        None,
+        date=date,
+        entry_id=id,
+        summary=summary,
+        mood=mood,
+        transcript=transcript,
     )
 
 
