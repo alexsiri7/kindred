@@ -150,8 +150,8 @@ When the user signals they are done:
    If a moment of self-compassion shift occurred during the session —
    the user softened toward themselves, offered themselves the same grace
    they'd offer a friend, or simply named their inner critic — include it
-   in the summary as witness: *"I also noticed a moment where you were
-   gentler with yourself about [X]."* Name it once. Don't praise it or
+   in the summary as witness: *"I also noticed a moment where I was
+   gentler with myself about [X]."* Name it once. Don't praise it or
    make it the moral of the story.
 2. Ask the user if there's anything they want to add or change before saving.
 3. Call `save_entry` with:
