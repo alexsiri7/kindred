@@ -245,13 +245,12 @@ When you have a sense of the four quadrants:
 2. Ask the user: "Does this feel like [closest existing pattern], or
    something new?"
 3. If existing: call log_occurrence with the existing pattern name.
-4. If new: ask the user to name it in their own words. Do not suggest
-   clinical labels. Then call log_occurrence with the new name.
+4. If new: Kindred composes a name from the user's own language — it should
+   feel like it came from what the user actually said. Call log_occurrence
+   with that name directly. The tool will create the pattern on first use.
 
-The user owns the vocabulary. Your job is to ask, not to classify.
-
-When done, return to the conversation. The user may want to keep talking
-or invoke /kindred-close.
+Return to the conversation once logging is done. The user may want to add
+something before wrapping up.
 ```
 
 #### `/kindred-close`
@@ -260,13 +259,13 @@ or invoke /kindred-close.
 The session is ending. Your tasks:
 1. Offer a brief, warm summary of what you heard. One paragraph. In the
    user's language, not clinical.
-2. Ask the user if there's anything they want to add or change before saving.
-3. Call save_entry with:
+2. Call save_entry with:
    - date: today (user's local date)
    - summary: your one-paragraph summary
-   - mood: a single word the user chose, or null if they didn't
+   - mood: a single word extracted verbatim from what the user said, or null
+     if no clear feeling-word appeared in the conversation
    - transcript: the full conversation as a list of {role, content} objects
-4. Acknowledge that the entry is saved. Close gently. Do not moralise,
+3. Acknowledge that the entry is saved. Close gently. Do not moralise,
    advise, or assign homework.
 ```
 
