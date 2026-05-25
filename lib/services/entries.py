@@ -90,7 +90,13 @@ def update_entry(
     mood: str | None = None,
     transcript: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
-    """Partially update an existing entry, re-embedding if summary changes."""
+    """Partially update an existing entry, re-embedding if summary changes.
+
+    Note: entry row and embedding are updated in two separate DB calls (no
+    cross-table transaction available via PostgREST). The embedding is
+    pre-computed before any DB write so that a network failure leaves the
+    DB unchanged — same pattern as save_entry/insert_embedding.
+    """
     if (date is None) == (entry_id is None):
         raise ValueError("provide exactly one of `date` or `entry_id`")
     if entry_id is None:
@@ -108,12 +114,16 @@ def update_entry(
         patch["transcript"] = transcript
     if not patch:
         raise ValueError("at least one field must be supplied")
+    # Pre-compute embedding BEFORE writing to DB so a network failure
+    # doesn't leave entry/embedding in diverged state (mirrors save_entry).
+    vector: list[float] | None = None
+    if summary is not None:
+        vector = embeddings.embed(summary)
     updated = db.update_entry(user_id, jwt_token, entry_id, patch)
     if updated is None:
         raise LookupError("entry not found")
-    if summary is not None:
-        vector = embeddings.embed(summary)
-        db.update_embedding(user_id, jwt_token, entry_id, vector, summary)
+    if vector is not None:
+        db.update_embedding(user_id, jwt_token, entry_id, vector, summary)  # type: ignore[arg-type]
     return updated
 
 

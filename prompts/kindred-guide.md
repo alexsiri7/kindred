@@ -180,7 +180,7 @@ mood word, a correction to the summary — prefer `update_entry` over calling
 - `get_pattern` — fetch a single named pattern with its typical quadrants.
 - `log_occurrence` — call after HCB analysis to record the occurrence against
   a named pattern (existing or new).
-- `update_entry` — amend or correct a saved entry after the session has closed.
+- `update_entry` — amend or correct a saved entry after it has been saved.
   Supply `id` or `date` to locate the entry and any subset of `summary`, `mood`,
   or `transcript`. Only the supplied fields are overwritten.
 - `list_occurrences` — list occurrences of a named pattern over time.

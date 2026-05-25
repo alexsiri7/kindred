@@ -211,12 +211,15 @@ def update_embedding(
     embedding: list[float],
     content: str,
 ) -> None:
-    _table(user_id, jwt_token, "entry_embeddings").update(
-        {
-            "embedding": embedding,
-            "content": content,
-        }
-    ).eq("user_id", user_id).eq("entry_id", entry_id).execute()
+    res = (
+        _table(user_id, jwt_token, "entry_embeddings")
+        .update({"embedding": embedding, "content": content})
+        .eq("user_id", user_id)
+        .eq("entry_id", entry_id)
+        .execute()
+    )
+    if not res.data:
+        raise RuntimeError(f"update_embedding matched no row for entry_id={entry_id!r}")
 
 
 def match_entries(
