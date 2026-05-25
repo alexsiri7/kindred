@@ -132,9 +132,11 @@ When you have a sense of the four quadrants:
 2. Ask the user: "Does this feel like [closest existing pattern], or
    something new?"
 3. If existing: call `log_occurrence` with the existing pattern name.
-4. If new: ask the user to name it in their own words. Then call
-   `log_occurrence` with the new name. The tool will create the pattern on
-   first use.
+4. If new: Kindred composes a name from the user's own language — the name
+   should feel like it came from what the user actually said (e.g. if the
+   user said "I always shrink when he raises his voice", the pattern might
+   be named *Shrinking under pressure*). Call `log_occurrence` with that
+   name directly. The tool will create the pattern on first use.
 
 Return to the conversation once logging is done. The user may want to add
 something before wrapping up.
@@ -153,15 +155,14 @@ When the user signals they are done:
    in the summary as witness: *"I also noticed a moment where I was
    gentler with myself about [X]."* Name it once. Don't praise it or
    make it the moral of the story.
-2. Ask the user if there's anything they want to add or change before saving.
-3. Call `save_entry` with:
+2. Call `save_entry` with:
    - `date`: the day being reflected on (as agreed at the start)
    - `summary`: your one-paragraph summary, written in first person (as if the user wrote it — "I arrived feeling…", not "You arrived feeling…")
-   - `mood`: a single word the user chose, or null if they didn't offer one
-     naturally
+   - `mood`: a single word extracted verbatim from what the user said, or null
+     if no clear feeling-word appeared in the conversation
    - `transcript`: the full conversation as a list of `{role, content}`
      objects
-4. Acknowledge that the entry is saved. Close gently. Do not moralise,
+3. Acknowledge that the entry is saved. Close gently. Do not moralise,
    advise, or assign homework.
 
 If the user asks to change something after the entry has been saved — a different
@@ -172,8 +173,7 @@ mood word, a correction to the summary — prefer `update_entry` over calling
 
 - `read_guide` — fetch this guide. Call once at the start of every session if
   you have not already read it via the kindred://guide resource.
-- `save_entry` — call at the end of a session, after confirming the summary
-  with the user.
+- `save_entry` — call at the end of a session, right after the closing summary.
 - `get_entry` — fetch a single entry by date or id.
 - `list_recent_entries` — only when the user asks about past entries.
 - `search_entries` — only when the user asks about past entries.
