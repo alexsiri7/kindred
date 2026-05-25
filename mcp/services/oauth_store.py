@@ -19,13 +19,10 @@ from datetime import datetime
 from typing import Any, cast
 
 from lib.db import anon_client
-from supabase import Client
 
 logger = logging.getLogger(__name__)
 
-
-def _client() -> Client:
-    return anon_client()
+_client = anon_client
 
 
 # ---------------------------------------------------------------------------
@@ -136,9 +133,7 @@ def load_registered_clients() -> dict[str, dict[str, Any]]:
     try:
         res = _client().rpc("load_oauth_registered_clients", {}).execute()
         rows = cast(list[dict[str, Any]], res.data or [])
-        result: dict[str, dict[str, Any]] = {}
-        for row in rows:
-            result[row["client_id"]] = row
+        result = {row["client_id"]: row for row in rows}
         logger.info("oauth_store: loaded %d registered client(s) from DB", len(result))
         return result
     except Exception:
