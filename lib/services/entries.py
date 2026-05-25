@@ -1,4 +1,4 @@
-"""Entry business logic: save, get, list, search.
+"""Entry business logic: save, get, list, search, update, delete.
 
 Async/sync convention: these are sync. supabase-py 2.x is sync; the MCP
 side wraps calls in ``asyncio.to_thread`` (see mcp/tools/entries.py); the
@@ -94,8 +94,8 @@ def update_entry(
 
     Note: entry row and embedding are updated in two separate DB calls (no
     cross-table transaction available via PostgREST). The embedding is
-    pre-computed before any DB write so that a network failure leaves the
-    DB unchanged — same pattern as save_entry/insert_embedding.
+    pre-computed before any DB write so that a failed embedding API call
+    leaves the DB unchanged.
     """
     if (date is None) == (entry_id is None):
         raise ValueError("provide exactly one of `date` or `entry_id`")
@@ -115,7 +115,7 @@ def update_entry(
     if not patch:
         raise ValueError("at least one field must be supplied")
     # Pre-compute embedding BEFORE writing to DB so a network failure
-    # doesn't leave entry/embedding in diverged state (mirrors save_entry).
+    # doesn't leave entry/embedding in diverged state.
     vector: list[float] | None = None
     if summary is not None:
         vector = embeddings.embed(summary)
