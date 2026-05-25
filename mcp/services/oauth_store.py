@@ -22,6 +22,8 @@ from lib.db import anon_client
 
 logger = logging.getLogger(__name__)
 
+_client = anon_client
+
 
 # ---------------------------------------------------------------------------
 # refresh_tokens
@@ -37,7 +39,7 @@ def save_refresh_token(token: str, entry: dict[str, Any]) -> None:
     if isinstance(issued_at, datetime):
         issued_at = issued_at.isoformat()
     try:
-        anon_client().rpc(
+        _client().rpc(
             "upsert_oauth_refresh_token",
             {
                 "p_token": token,
@@ -63,7 +65,7 @@ def delete_refresh_token(token: str) -> None:
     until a manual or scheduled cleanup runs.
     """
     try:
-        anon_client().rpc("delete_oauth_refresh_token", {"p_token": token}).execute()
+        _client().rpc("delete_oauth_refresh_token", {"p_token": token}).execute()
     except Exception:
         logger.exception(
             "oauth_store: failed to delete refresh token %s — "
@@ -75,7 +77,7 @@ def delete_refresh_token(token: str) -> None:
 def load_refresh_tokens() -> dict[str, dict[str, Any]]:
     """Load all non-expired refresh tokens from DB. Called at startup."""
     try:
-        res = anon_client().rpc("load_oauth_refresh_tokens", {}).execute()
+        res = _client().rpc("load_oauth_refresh_tokens", {}).execute()
         rows = cast(list[dict[str, Any]], res.data or [])
         result: dict[str, dict[str, Any]] = {}
         for row in rows:
@@ -107,7 +109,7 @@ def save_registered_client(client_id: str, entry: dict[str, Any]) -> None:
     grant_types = entry.get("grant_types", ["authorization_code"])
     response_types = entry.get("response_types", ["code"])
     try:
-        anon_client().rpc(
+        _client().rpc(
             "upsert_oauth_registered_client",
             {
                 "p_client_id": client_id,
@@ -129,7 +131,7 @@ def save_registered_client(client_id: str, entry: dict[str, Any]) -> None:
 def load_registered_clients() -> dict[str, dict[str, Any]]:
     """Load all registered clients from DB. Called at startup."""
     try:
-        res = anon_client().rpc("load_oauth_registered_clients", {}).execute()
+        res = _client().rpc("load_oauth_registered_clients", {}).execute()
         rows = cast(list[dict[str, Any]], res.data or [])
         result = {row["client_id"]: row for row in rows}
         logger.info("oauth_store: loaded %d registered client(s) from DB", len(result))
