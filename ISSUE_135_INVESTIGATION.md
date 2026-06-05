@@ -29,7 +29,7 @@ The production `/healthz` endpoint returned HTTP 000 (connection refused) on 202
 Railway performed a scheduled container restart. During the restart window (typically 5–30 seconds), the process wasn't listening. The health-check monitor fired during this transient window, triggering the alert.
 
 **Configuration is correct**:
-- `web/railway.toml:5` — `healthcheckTimeout = 60` (appropriate for startup time)
+- `web/railway.toml:10` — `healthcheckTimeout = 60` (appropriate for startup time)
 - `web/backend/main.py:47-49` — `/healthz` handler is correct and dependency-free
 
 ### Optional Improvements (Out of Scope)
