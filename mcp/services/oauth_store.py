@@ -6,8 +6,11 @@ Wraps the two long-lived in-memory dicts in oauth_state:
   - registered_clients (no TTL): written on /oauth/register, never deleted,
     loaded at startup.
 
-Uses security-definer RPC functions (005_oauth_token_rpcs.sql) callable via
-the anon key — no service-role key required in request-handling code (#44).
+Uses the security-definer RPC functions from 005_oauth_token_rpcs.sql. These
+tables hold server-only OAuth state, so the RPCs are called with a dedicated
+server-side client built from SUPABASE_SERVICE_ROLE_KEY (mcp only — the key is
+never exposed to the web app or browser). This is the single, gated exception
+to the #44 service-role boundary; see scripts/gates.sh.
 All reads/writes are synchronous blocking calls (called from async FastAPI handlers).
 """
 
@@ -16,13 +19,33 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime
+from functools import lru_cache
 from typing import Any, cast
 
-from lib.db import anon_client
+from supabase import Client, create_client
+
+from settings import settings
 
 logger = logging.getLogger(__name__)
 
-_client = anon_client
+
+@lru_cache(maxsize=1)
+def _client() -> Client:
+    """Server-only Supabase client for the OAuth persistence RPCs.
+
+    Deliberately separate from ``lib.db`` clients: it is never shared with
+    user-scoped code paths and never has a user JWT attached. There is no
+    fallback to the anon key — if the key is missing, persistence fails loudly
+    (callers log and continue with in-memory state).
+    """
+    key = settings.supabase_service_role_key
+    if not key:
+        logger.error(
+            "oauth_store: SUPABASE_SERVICE_ROLE_KEY is not configured — "
+            "OAuth token persistence is disabled"
+        )
+        raise RuntimeError("SUPABASE_SERVICE_ROLE_KEY is not configured")
+    return create_client(settings.supabase_url, key)
 
 
 # ---------------------------------------------------------------------------

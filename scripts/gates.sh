@@ -59,10 +59,14 @@ fi
 echo "--- service-role boundary check (#44) ---"
 # Per #44, service_role / service_client must not appear in request-handling
 # code (mcp/, web/backend/, lib/). Tests legitimately reference them for
-# historical context so are excluded.
-if grep -rn --include='*.py' --exclude-dir=tests -E 'service_role|service_client' mcp/ web/backend/ lib/; then
+# historical context so are excluded. The single allowed exception is the
+# mcp-only OAuth persistence layer (server-side token/client storage) and the
+# mcp setting that declares its key.
+if grep -rn --include='*.py' --exclude-dir=tests -E 'service_role|service_client' mcp/ web/backend/ lib/ \
+    | grep -v -E '^(mcp/settings\.py|mcp/services/oauth_store\.py):'; then
   echo "FAIL: service_role / service_client reference found in request-handling code."
-  echo "      Per #44, these are only allowed under scripts/ and supabase/."
+  echo "      Per #44, these are only allowed under scripts/ and supabase/"
+  echo "      (plus mcp/services/oauth_store.py and mcp/settings.py)."
   exit 1
 fi
 

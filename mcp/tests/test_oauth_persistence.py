@@ -205,3 +205,19 @@ def test_load_registered_clients_handles_db_failure(mock_client) -> None:
     mock_client().rpc().execute.side_effect = RuntimeError("DB down")
     result = load_registered_clients()
     assert result == {}
+
+
+def test_client_requires_server_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The persistence client never falls back to the public anon key."""
+    import settings as settings_module
+    from services import oauth_store
+
+    monkeypatch.setattr(settings_module.settings, "supabase_service_role_key", "")
+    oauth_store._client.cache_clear()
+    try:
+        with pytest.raises(RuntimeError):
+            oauth_store._client()
+        # Callers swallow the error and fall back to an empty store.
+        assert oauth_store.load_registered_clients() == {}
+    finally:
+        oauth_store._client.cache_clear()

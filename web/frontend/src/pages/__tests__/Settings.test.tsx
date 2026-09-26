@@ -31,7 +31,7 @@ const ACTIVE_TOKEN: ConnectorTokenSummary = {
   id: 'tok-active-1',
   created_at: '2026-04-01T00:00:00Z',
   last_used_at: null,
-  expires_at: '2026-08-01T00:00:00Z',
+  expires_at: '2099-08-01T00:00:00Z',
   revoked_at: null,
 }
 
@@ -153,7 +153,7 @@ describe('Settings — connector tokens section', () => {
         // mint
         token: 'kdr_new_token_value_12345',
         created_at: '2026-05-04T00:00:00Z',
-        expires_at: '2026-08-02T00:00:00Z',
+        expires_at: '2099-08-02T00:00:00Z',
       })
 
     render(<Settings />)
