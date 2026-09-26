@@ -47,7 +47,11 @@ async def test_authorization_server_metadata(client: httpx.AsyncClient) -> None:
     assert data["response_types_supported"] == ["code"]
     assert data["grant_types_supported"] == ["authorization_code", "refresh_token"]
     assert data["code_challenge_methods_supported"] == ["S256"]
-    assert data["token_endpoint_auth_methods_supported"] == ["none"]
+    assert data["token_endpoint_auth_methods_supported"] == [
+        "none",
+        "client_secret_post",
+        "client_secret_basic",
+    ]
     assert data["scopes_supported"] == ["mcp"]
 
 

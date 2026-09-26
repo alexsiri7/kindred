@@ -24,7 +24,7 @@ import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
-from urllib.parse import urlencode
+from urllib.parse import unquote_plus, urlencode
 
 import httpx
 import jwt
@@ -36,6 +36,7 @@ from starlette.responses import JSONResponse, RedirectResponse, Response
 from oauth_state import (
     _state_lock,
     auth_codes,
+    cleanup_and_get,
     cleanup_and_pop,
     cleanup_and_store,
     oauth_sessions,
@@ -79,6 +80,68 @@ def _create_jwt(user_id: str, email: str | None) -> str:
     if email:
         payload["email"] = email
     return jwt.encode(payload, settings.secret_key, algorithm="HS256")
+
+
+_CONFIDENTIAL_AUTH_METHODS = frozenset({"client_secret_post", "client_secret_basic"})
+
+
+def _invalid_client(detail: str) -> HTTPException:
+    return HTTPException(
+        status_code=401,
+        detail=detail,
+        headers={"WWW-Authenticate": 'Basic realm="oauth"'},
+    )
+
+
+def _client_credentials(request: Request, form: Any) -> tuple[str, str]:
+    """Extract (client_id, client_secret) from HTTP Basic auth or the form body.
+
+    RFC 6749 §2.3.1: Basic credentials are form-urlencoded before base64.
+    Empty strings mean "not supplied".
+    """
+    header = request.headers.get("authorization", "")
+    if header[:6].lower() == "basic ":
+        try:
+            decoded = base64.b64decode(header[6:].strip(), validate=True).decode("utf-8")
+        except Exception as exc:
+            raise _invalid_client("Malformed Basic authorization header") from exc
+        basic_id, sep, basic_secret = decoded.partition(":")
+        if not sep:
+            raise _invalid_client("Malformed Basic authorization header")
+        return unquote_plus(basic_id), unquote_plus(basic_secret)
+    return str(form.get("client_id", "") or ""), str(form.get("client_secret", "") or "")
+
+
+def _authenticate_refresh_client(request: Request, form: Any, token_client_id: str) -> None:
+    """Authenticate the client presenting a refresh token (OAuth 2.1 §4.3.1).
+
+    - The client the token was issued to must still be registered.
+    - Confidential clients (client_secret_post / client_secret_basic) must
+      present their client_id and client_secret.
+    - Public clients (token_endpoint_auth_method="none") cannot authenticate;
+      the refresh token is sender-bound only by rotation. If they send a
+      client_id it must match the token's client.
+    """
+    presented_id, presented_secret = _client_credentials(request, form)
+    client = registered_clients.get(token_client_id)
+    if not client:
+        raise _invalid_client("Unknown client")
+    if presented_id and not secrets.compare_digest(presented_id, token_client_id):
+        raise HTTPException(status_code=400, detail="refresh_token was not issued to this client")
+
+    method = client.get("token_endpoint_auth_method", "client_secret_post")
+    if method not in _CONFIDENTIAL_AUTH_METHODS:
+        if not presented_id:
+            logger.info(
+                "MCP OAuth: refresh for public client %s without client_id", token_client_id
+            )
+        return
+
+    expected_secret = str(client.get("client_secret") or "")
+    if not presented_id or not presented_secret or not expected_secret:
+        raise _invalid_client("Client authentication required")
+    if not secrets.compare_digest(presented_secret, expected_secret):
+        raise _invalid_client("Client authentication failed")
 
 
 def _pkce_s256(verifier: str) -> str:
@@ -294,7 +357,11 @@ def register_routes(mcp_obj: FastMCP) -> None:
                 "response_types_supported": ["code"],
                 "grant_types_supported": ["authorization_code", "refresh_token"],
                 "code_challenge_methods_supported": ["S256"],
-                "token_endpoint_auth_methods_supported": ["none"],
+                "token_endpoint_auth_methods_supported": [
+                    "none",
+                    "client_secret_post",
+                    "client_secret_basic",
+                ],
                 "scopes_supported": ["mcp"],
             }
         )
@@ -513,6 +580,12 @@ def register_routes(mcp_obj: FastMCP) -> None:
             refresh_token = str(form.get("refresh_token", ""))
             if not refresh_token:
                 raise HTTPException(status_code=400, detail="refresh_token is required")
+            # Authenticate the client before consuming the token, so a failed
+            # attempt does not burn a valid refresh token.
+            existing = cleanup_and_get(refresh_tokens, refresh_token)
+            if not existing:
+                raise HTTPException(status_code=400, detail="Invalid or expired refresh_token")
+            _authenticate_refresh_client(request, form, str(existing.get("client_id", "")))
             session = cleanup_and_pop(refresh_tokens, refresh_token)
             if not session:
                 raise HTTPException(status_code=400, detail="Invalid or expired refresh_token")

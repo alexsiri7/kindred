@@ -162,7 +162,32 @@ async def test_authorize_rejects_unknown_client_id(client: httpx.AsyncClient) ->
 # ---------------------------------------------------------------------------
 
 
-def _seed_auth_code(*, code: str, verifier: str, redirect_uri: str) -> None:
+PUBLIC_CLIENT_ID = "test-client"
+CONF_CLIENT_ID = "conf-client"
+CONF_SECRET = "conf-secret-value"
+
+
+def _seed_client(client_id: str, method: str, secret: str = "unused-secret") -> None:
+    oauth_state.registered_clients[client_id] = {
+        "client_id": client_id,
+        "client_secret": secret,
+        "redirect_uris": ["https://app/cb"],
+        "client_name": client_id,
+        "grant_types": ["authorization_code", "refresh_token"],
+        "response_types": ["code"],
+        "token_endpoint_auth_method": method,
+        "scope": "mcp",
+    }
+
+
+@pytest.fixture(autouse=True)
+def _seed_public_client(_clear_state: None) -> None:
+    _seed_client(PUBLIC_CLIENT_ID, "none")
+
+
+def _seed_auth_code(
+    *, code: str, verifier: str, redirect_uri: str, client_id: str = PUBLIC_CLIENT_ID
+) -> None:
     challenge = (
         base64.urlsafe_b64encode(hashlib.sha256(verifier.encode("ascii")).digest())
         .rstrip(b"=")
@@ -175,7 +200,7 @@ def _seed_auth_code(*, code: str, verifier: str, redirect_uri: str) -> None:
         "code_challenge_method": "S256",
         "redirect_uri": redirect_uri,
         "scope": "mcp",
-        "client_id": "test-client",
+        "client_id": client_id,
         "expires_at": datetime.now(UTC) + timedelta(minutes=5),
     }
 
@@ -312,3 +337,134 @@ async def test_token_rotation_calls_delete_refresh_token(
     )
     assert r2.status_code == 200
     assert deleted == [refresh_token_1]
+
+
+# ---------------------------------------------------------------------------
+# /oauth/token (refresh_token) — client authentication
+# ---------------------------------------------------------------------------
+
+
+async def _issue_refresh(client: httpx.AsyncClient, code: str, client_id: str) -> str:
+    verifier, _ = _pkce_pair()
+    _seed_auth_code(
+        code=code, verifier=verifier, redirect_uri="https://app/cb", client_id=client_id
+    )
+    res = await client.post(
+        "/oauth/token",
+        data={
+            "grant_type": "authorization_code",
+            "code": code,
+            "redirect_uri": "https://app/cb",
+            "code_verifier": verifier,
+            "client_id": client_id,
+        },
+    )
+    assert res.status_code == 200
+    return str(res.json()["refresh_token"])
+
+
+async def test_refresh_confidential_client_requires_secret(client: httpx.AsyncClient) -> None:
+    _seed_client(CONF_CLIENT_ID, "client_secret_post", CONF_SECRET)
+    rt = await _issue_refresh(client, "ac-c1", CONF_CLIENT_ID)
+    res = await client.post(
+        "/oauth/token",
+        data={"grant_type": "refresh_token", "refresh_token": rt, "client_id": CONF_CLIENT_ID},
+    )
+    assert res.status_code == 401
+    # A failed authentication must not consume the refresh token.
+    assert rt in oauth_state.refresh_tokens
+
+
+async def test_refresh_confidential_client_rejects_wrong_secret(
+    client: httpx.AsyncClient,
+) -> None:
+    _seed_client(CONF_CLIENT_ID, "client_secret_post", CONF_SECRET)
+    rt = await _issue_refresh(client, "ac-c2", CONF_CLIENT_ID)
+    res = await client.post(
+        "/oauth/token",
+        data={
+            "grant_type": "refresh_token",
+            "refresh_token": rt,
+            "client_id": CONF_CLIENT_ID,
+            "client_secret": "wrong",
+        },
+    )
+    assert res.status_code == 401
+    assert rt in oauth_state.refresh_tokens
+
+
+async def test_refresh_confidential_client_rejects_missing_credentials(
+    client: httpx.AsyncClient,
+) -> None:
+    _seed_client(CONF_CLIENT_ID, "client_secret_post", CONF_SECRET)
+    rt = await _issue_refresh(client, "ac-c3", CONF_CLIENT_ID)
+    res = await client.post(
+        "/oauth/token", data={"grant_type": "refresh_token", "refresh_token": rt}
+    )
+    assert res.status_code == 401
+
+
+async def test_refresh_confidential_client_post_secret_succeeds(
+    client: httpx.AsyncClient,
+) -> None:
+    _seed_client(CONF_CLIENT_ID, "client_secret_post", CONF_SECRET)
+    rt = await _issue_refresh(client, "ac-c4", CONF_CLIENT_ID)
+    res = await client.post(
+        "/oauth/token",
+        data={
+            "grant_type": "refresh_token",
+            "refresh_token": rt,
+            "client_id": CONF_CLIENT_ID,
+            "client_secret": CONF_SECRET,
+        },
+    )
+    assert res.status_code == 200
+    assert rt not in oauth_state.refresh_tokens
+
+
+async def test_refresh_confidential_client_basic_auth_succeeds(
+    client: httpx.AsyncClient,
+) -> None:
+    _seed_client(CONF_CLIENT_ID, "client_secret_basic", CONF_SECRET)
+    rt = await _issue_refresh(client, "ac-c5", CONF_CLIENT_ID)
+    basic = base64.b64encode(f"{CONF_CLIENT_ID}:{CONF_SECRET}".encode()).decode()
+    res = await client.post(
+        "/oauth/token",
+        data={"grant_type": "refresh_token", "refresh_token": rt},
+        headers={"Authorization": f"Basic {basic}"},
+    )
+    assert res.status_code == 200
+
+
+async def test_refresh_rejects_other_clients_token(client: httpx.AsyncClient) -> None:
+    _seed_client(CONF_CLIENT_ID, "client_secret_post", CONF_SECRET)
+    rt = await _issue_refresh(client, "ac-c6", PUBLIC_CLIENT_ID)
+    res = await client.post(
+        "/oauth/token",
+        data={
+            "grant_type": "refresh_token",
+            "refresh_token": rt,
+            "client_id": CONF_CLIENT_ID,
+            "client_secret": CONF_SECRET,
+        },
+    )
+    assert res.status_code == 400
+    assert rt in oauth_state.refresh_tokens
+
+
+async def test_refresh_public_client_with_matching_client_id(client: httpx.AsyncClient) -> None:
+    rt = await _issue_refresh(client, "ac-p1", PUBLIC_CLIENT_ID)
+    res = await client.post(
+        "/oauth/token",
+        data={"grant_type": "refresh_token", "refresh_token": rt, "client_id": PUBLIC_CLIENT_ID},
+    )
+    assert res.status_code == 200
+
+
+async def test_refresh_rejects_unregistered_client(client: httpx.AsyncClient) -> None:
+    rt = await _issue_refresh(client, "ac-p2", PUBLIC_CLIENT_ID)
+    oauth_state.registered_clients.pop(PUBLIC_CLIENT_ID)
+    res = await client.post(
+        "/oauth/token", data={"grant_type": "refresh_token", "refresh_token": rt}
+    )
+    assert res.status_code == 401
