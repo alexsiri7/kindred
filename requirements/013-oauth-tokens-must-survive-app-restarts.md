@@ -2,9 +2,9 @@
 created: '2026-05-24'
 github_issue: 125
 id: '013'
-status: idea
+status: done
 title: OAuth tokens must survive app restarts
-updated: '2026-05-24'
+updated: '2026-09-28'
 ---
 
 ## Why
