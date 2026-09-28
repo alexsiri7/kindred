@@ -1,9 +1,9 @@
 ---
-id: "012"
-title: "Weekly/monthly retrospective reports"
-status: "idea"
 github_issue: 120
-updated: "2026-05-12"
+id: '012'
+status: done
+title: Weekly/monthly retrospective reports
+updated: '2026-09-28'
 ---
 
 ## Why
