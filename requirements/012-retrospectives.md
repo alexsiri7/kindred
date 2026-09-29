@@ -1,9 +1,9 @@
 ---
 github_issue: 120
 id: '012'
-status: idea
+status: done
 title: Weekly/monthly retrospective reports
-updated: '2026-09-28'
+updated: '2026-09-29'
 ---
 
 ## Why
