@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   gates:
@@ -70,3 +71,11 @@ jobs:
       - uses: actions/checkout@v4
       - name: Unit tests (system python3 + PyYAML, as the check uses)
         run: python3 -m unittest discover -s .github/unsafe-change
+
+  deploy-guard-tests:
+    name: deploy guard tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unit tests (system python3 + PyYAML)
+        run: python3 -m unittest discover -s .github/deploy-guard
